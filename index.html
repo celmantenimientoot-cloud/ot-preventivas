@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e7666">
+<title>OT preventivas</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icono.svg" type="image/svg+xml">
+<style>
+:root{--pri:#0e7666;--pri-ink:#fff;--bg:#eef2f0;--card:#fff;--ink:#14201c;--muted:#4a5a55;--line:#d3dcd8;
+  --ok:#0b5b45;--ok-soft:#d9f0e6;--warn:#7a3d00;--warn-soft:#fdebd6;--bad:#c0392b;--bad-ink:#7a1f14;--bad-soft:#fbe0dc;--info:#1f4f86;--info-soft:#e3ecf7}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 "Segoe UI",Roboto,Arial,sans-serif;-webkit-text-size-adjust:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+.app{max-width:720px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;background:var(--card)}
+.bar{background:var(--pri);color:var(--pri-ink);padding:12px 16px;display:flex;align-items:center;gap:10px}
+.bar .t{flex:1;min-width:0}.bar b{display:block;font-size:19px}.bar small{opacity:.9;font-size:13px}
+.bar button{background:transparent;border:1px solid rgba(255,255,255,.6);color:#fff;border-radius:8px;padding:6px 12px;min-height:40px}
+.net{display:flex;justify-content:space-between;gap:8px;font-size:13px;font-weight:600;padding:6px 16px;background:var(--warn-soft);color:var(--warn)}
+.net.ok{background:var(--ok-soft);color:var(--ok)}
+.net button{background:none;border:0;color:inherit;text-decoration:underline;font-weight:600;padding:0}
+main{flex:1;padding:14px 16px 24px;display:flex;flex-direction:column;gap:12px}
+h2{font-size:17px;margin:4px 0 0}
+.card{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff}
+.card .t{font-weight:700}.card .m{font-size:13.5px;color:var(--muted)}
+.prog{height:9px;background:#e3e9e6;border-radius:5px;margin-top:8px;overflow:hidden}.prog i{display:block;height:100%;background:var(--pri)}
+.big{display:block;width:100%;background:var(--pri);color:#fff;border:0;border-radius:12px;padding:15px;font-size:18px;font-weight:700;min-height:56px;cursor:pointer}
+.big.sec{background:#fff;color:var(--pri);border:2px solid var(--pri)}
+.big:disabled{opacity:.5}
+.btn{border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 14px;min-height:44px;cursor:pointer}
+.pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:9px}
+.p-ok{background:var(--ok-soft);color:var(--ok)}.p-w{background:var(--warn-soft);color:var(--warn)}.p-b{background:var(--bad-soft);color:var(--bad-ink)}.p-i{background:var(--info-soft);color:var(--info)}
+.cam{position:relative;background:#26302c;border-radius:12px;overflow:hidden;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;color:#fff;text-align:center}
+.cam video{width:100%;height:100%;object-fit:cover}
+.cam .marco{position:absolute;width:56%;aspect-ratio:1;border:3px solid #fff;border-radius:14px;box-shadow:0 0 0 999px rgba(0,0,0,.25)}
+.cam span{position:absolute;bottom:10px;left:0;right:0;font-size:14px;text-shadow:0 1px 3px #000}
+.o{text-align:center;color:var(--muted);font-size:14px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted)}
+label.f input,label.f select,label.f textarea{border:1px solid #b4c2bd;border-radius:9px;padding:10px 12px;min-height:46px;background:#fff;color:var(--ink);font-size:16px}
+.pin{display:flex;gap:10px;justify-content:center}.pin i{width:48px;height:56px;border:2px solid #b4c2bd;border-radius:10px;font:700 26px monospace;font-style:normal;display:flex;align-items:center;justify-content:center}.pin i.f{border-color:var(--pri);color:var(--pri)}
+.tecl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.tecl button{min-height:58px;font-size:22px;font-weight:600;border:1px solid var(--line);border-radius:10px;background:#f5f8f7}
+.ficha{background:#f5f8f7;border-radius:10px;padding:8px 12px;font-size:14.5px}
+.fi{width:100%;border-collapse:collapse}.fi th{text-align:left;font-weight:500;color:var(--muted);padding:5px 10px 5px 0;width:46%;vertical-align:top}.fi td{padding:5px 0}.fi tr+tr th,.fi tr+tr td{border-top:1px solid #e3e9e6}
+.mono{font-family:monospace;font-weight:700}
+.it{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #eef2f0;font-size:15.5px}
+.sn{display:flex;gap:6px;flex:none}.sn button{min-width:58px;min-height:46px;font-weight:700;border-radius:9px;border:1px solid #b4c2bd;background:#fff}
+.sn button.si[aria-pressed=true]{background:var(--pri);color:#fff;border-color:var(--pri)}
+.sn button.no[aria-pressed=true]{background:var(--bad);color:#fff;border-color:var(--bad)}
+.aviso{border-radius:9px;padding:9px 11px;font-size:14px}
+.err{background:var(--bad-soft);color:var(--bad-ink)}
+.lista .row{display:flex;justify-content:space-between;gap:8px;padding:11px 4px;border-bottom:1px solid #eef2f0;cursor:pointer;background:none;border-left:0;border-right:0;border-top:0;width:100%;text-align:left;font-size:15px}
+.lista .row .mono{font-family:monospace;font-weight:700}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}.seg button{flex:1;min-height:44px;border:0;background:#fff}.seg button[aria-pressed=true]{background:var(--pri);color:#fff;font-weight:600}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.foto{max-width:100%;max-height:180px;border-radius:9px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#14201c;color:#fff;padding:11px 16px;border-radius:10px;font-size:15px;z-index:9;max-width:92vw}
+:focus-visible{outline:3px solid #e2bf00;outline-offset:2px}
+</style>
+</head><body>
+<div class="app" id="app"><main><p class="o">Cargando…</p></main></div>
+<script>
+'use strict';
+(() => { // todo adentro: en el simulador comparte la página con el servidor simulado
+/* =====================================================================
+   App de OT preventivas · funciona sin internet
+   - Habla con el mini ERP (Apps Script, archivo AppPrev.gs) por la dirección /exec.
+   - Guarda todo en la tablet (IndexedDB) y lo manda cuando hay señal.
+   - El QR de cada equipo es su POSICIÓN. El de la tarjeta del bombero es "BOMB|id|clave".
+   ===================================================================== */
+// Dirección /exec del proyecto "API app preventivos" (NO la del mini ERP: esa pide cuenta de Google). Se completa al publicarlo.
+const SERVIDOR = 'https://script.google.com/macros/s/AKfycbzOiXPcVwqBXRH0CSJH7ikE489uxdT1rbTJg7Gs9spmGIXSq891K76aFthpctjoFge0Ew/exec';
+const MIN_INACTIVO = 30;           // la sesión del bombero se cierra sola (tablet compartida)
+const LOTE = 5;                    // registros por envío (las fotos pesan)
+
+/* ---------- guardado en la tablet ---------- */
+const DB = (() => {
+  let db;
+  const abrir = () => db ? Promise.resolve(db) : new Promise((ok, mal) => {
+    const r = indexedDB.open('ot-preventivas', 1);
+    r.onupgradeneeded = () => { r.result.createObjectStore('kv'); r.result.createObjectStore('cola', { keyPath: 'uid' }); };
+    r.onsuccess = () => { db = r.result; ok(db); }; r.onerror = () => mal(r.error);
+  });
+  const tx = (st, modo, f) => abrir().then(d => new Promise((ok, mal) => { const t = d.transaction(st, modo), s = t.objectStore(st), r = f(s); t.oncomplete = () => ok(r && r.result); t.onerror = () => mal(t.error); }));
+  return { get: k => tx('kv', 'readonly', s => s.get(k)), set: (k, v) => tx('kv', 'readwrite', s => s.put(v, k)), del: k => tx('kv', 'readwrite', s => s.delete(k)),
+    cola: () => tx('cola', 'readonly', s => s.getAll()), encolar: r => tx('cola', 'readwrite', s => s.put(r)), quitar: uid => tx('cola', 'readwrite', s => s.delete(uid)) };
+})();
+
+/* ---------- estado ---------- */
+const E = { pantalla: 'cargando', tablet: null, cat: null, sesion: null, cola: [], online: navigator.onLine, enviando: false, msg: '', tipo: 'EXT', q: '', pin: '', bomberoPin: '', control: null, ultimoUso: Date.now() };
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const hoyIso = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const ahoraIso = () => { const d = new Date(); return hoyIso() + 'T' + [d.getHours(), d.getMinutes(), d.getSeconds()].map(x => String(x).padStart(2, '0')).join(':'); };
+const fmtD = s => s ? s.slice(0, 10).split('-').reverse().join('/') : '–';
+const quincena = iso => iso.slice(0, 7) + '-' + (Number(iso.slice(8, 10)) <= 15 ? 1 : 2);
+const ronda = (tipo, ed, iso) => 'PV-' + tipo + '-' + ed + '-' + quincena(iso);
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const nombreQ = iso => (Number(iso.slice(8, 10)) <= 15 ? '1ª' : '2ª') + ' quincena ' + MESES[Number(iso.slice(5, 7)) - 1];
+const diasHasta = iso => iso ? Math.round((new Date(iso + 'T00:00:00') - new Date(hoyIso() + 'T00:00:00')) / 86400000) : null;
+async function sha256(t){ const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)); return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, '0')).join(''); }
+function toast(t){ let el = document.querySelector('.toast'); if (!el){ el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); document.body.appendChild(el); } el.textContent = t; clearTimeout(toast.t); toast.t = setTimeout(() => el.remove(), 3000); }
+
+/* ---------- servidor ---------- */
+async function enviar(cuerpo){
+  if (window.SIM_DOPOST) return window.SIM_DOPOST(cuerpo); // simulador de pruebas
+  if (!/^https:\/\/script\.google\.com\//.test(SERVIDOR)) throw new Error('Falta configurar la dirección del servidor en la app.');
+  const r = await fetch(SERVIDOR, { method: 'POST', body: JSON.stringify(cuerpo) }); // texto plano: sin consulta previa (CORS)
+  if (!r.ok) throw new Error('El servidor respondió ' + r.status);
+  const j = await r.json();
+  if (j.error) throw new Error(j.error);
+  return j;
+}
+const conClave = c => Object.assign({ tablet: E.tablet.id, clave: E.tablet.clave }, c);
+async function guardarCatalogo(j){
+  E.cat = { ahora: j.ahora, equipos: j.equipos, rutinas: j.rutinas, tipos: j.tipos, motivos: j.motivos || {}, hechos: j.hechos || {}, abiertas: j.abiertas || {}, bomberos: j.bomberos, bajado: ahoraIso() };
+  await DB.set('catalogo', E.cat);
+  // Si al bombero lo dieron de baja, se le cierra la sesión (lo que ya guardó se envía igual)
+  if (E.sesion && !E.cat.bomberos.some(b => b.id === E.sesion.id)){ salir(); toast('Tu usuario fue dado de baja: avisá al supervisor'); }
+}
+function sinAcceso(e){
+  if (!/TABLET_SIN_ACCESO/.test(e.message)) return false;
+  E.tablet = null; DB.del('tablet'); E.sesion = null; E.pantalla = 'vincular';
+  E.msg = 'Esta tablet quedó desvinculada. Pedile un código nuevo al supervisor. Lo que no se envió sigue guardado.';
+  return true;
+}
+async function bajar(){
+  if (!E.tablet || !navigator.onLine) return;
+  try { await guardarCatalogo(await enviar(conClave({ op: 'bajar' }))); } catch(e){ if (sinAcceso(e)) dibujar(); }
+}
+async function sincronizar(manual){
+  if (E.enviando || !E.tablet) return;
+  E.cola = await DB.cola();
+  if (!navigator.onLine){ if (manual) toast('Sin señal: se envía solo cuando vuelva'); return; }
+  E.enviando = true; dibujar();
+  try {
+    while (E.cola.length){
+      const lote = E.cola.slice(0, LOTE);
+      const j = await enviar(conClave({ op: 'subir', registros: lote }));
+      for (const uid of j.recibidos || []) await DB.quitar(uid);
+      await guardarCatalogo(j);
+      E.cola = await DB.cola();
+      if (!(j.recibidos || []).length) break;
+    }
+    if (!E.cola.length) await bajar();
+    if (manual) toast(E.cola.length ? 'Quedan ' + E.cola.length + ' sin enviar' : 'Todo enviado');
+  } catch(e){ if (!sinAcceso(e) && manual) toast('No se pudo enviar: ' + e.message); }
+  E.enviando = false; dibujar();
+}
+
+/* ---------- cámara y QR (lector del navegador: Chrome en Android) ---------- */
+const CAM = { stream: null, timer: null };
+function pararCamara(){ clearInterval(CAM.timer); CAM.timer = null; if (CAM.stream){ CAM.stream.getTracks().forEach(t => t.stop()); CAM.stream = null; } }
+async function iniciarCamara(alLeer){
+  pararCamara();
+  const v = document.getElementById('video'), aviso = document.getElementById('cam-aviso');
+  if (!v) return;
+  if (!('BarcodeDetector' in window)){ aviso.textContent = 'Esta tablet no lee QR desde el navegador. Usá "Buscar sin QR".'; return; }
+  try {
+    const det = new BarcodeDetector({ formats: ['qr_code'] });
+    CAM.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    v.srcObject = CAM.stream; await v.play();
+    let ocupado = false;
+    CAM.timer = setInterval(async () => {
+      if (ocupado || v.readyState < 2) return; ocupado = true;
+      try { const c = await det.detect(v); if (c.length){ const txt = c[0].rawValue.trim(); pararCamara(); if (navigator.vibrate) navigator.vibrate(80); alLeer(txt); } } catch(e){}
+      ocupado = false;
+    }, 250);
+  } catch(e){ aviso.textContent = 'No se pudo abrir la cámara: ' + e.message; }
+}
+
+/* ---------- sesión del bombero ---------- */
+async function entrarConQR(txt){
+  const p = txt.split('|');
+  const b = p[0] === 'BOMB' && (E.cat.bomberos || []).find(x => x.id === p[1]);
+  if (b && b.qr === await sha256(b.id + ':' + p[2])) return iniciarSesion(b);
+  E.msg = 'Esa tarjeta no sirve (dada de baja o reemplazada). Entrá con tu PIN o avisá al supervisor.';
+  dibujar();
+}
+async function entrarConPin(){
+  const b = (E.cat.bomberos || []).find(x => x.id === E.bomberoPin);
+  if (b && b.pin === await sha256(b.id + ':' + E.pin)) return iniciarSesion(b);
+  E.pin = ''; E.msg = 'PIN incorrecto.'; dibujar();
+}
+function iniciarSesion(b){
+  E.sesion = { id: b.id, nombre: b.nombre, desde: ahoraIso() };
+  sessionStorage.setItem('sesion', JSON.stringify(E.sesion));
+  E.pin = ''; E.msg = ''; E.pantalla = 'inicio'; E.ultimoUso = Date.now();
+  dibujar(); bajar().then(dibujar);
+}
+function salir(){ E.sesion = null; sessionStorage.removeItem('sesion'); pararCamara(); E.pantalla = 'login'; E.control = null; dibujar(); }
+setInterval(() => { if (E.sesion && Date.now() - E.ultimoUso > MIN_INACTIVO * 60000){ salir(); toast('Sesión cerrada por inactividad'); } }, 30000);
+['click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, () => { E.ultimoUso = Date.now(); }, { passive: true }));
+
+/* ---------- avance (servidor + lo que todavía está en la tablet) ---------- */
+function hechosDe(tipo){
+  const id = ronda(tipo, E.tablet.ed, hoyIso()), h = Object.assign({}, (E.cat.hechos || {})[id] || {});
+  E.cola.forEach(r => { if (r.tipo === tipo && ronda(tipo, E.tablet.ed, r.ts.slice(0, 10)) === id) h[r.pos] = r.ts; });
+  return h;
+}
+const equiposDe = tipo => (E.cat.equipos || []).filter(e => e.tipo === tipo);
+
+/* ---------- control de un equipo ---------- */
+function abrirControl(pos, tipo){
+  const eq = (E.cat.equipos || []).find(e => e.pos.toUpperCase() === pos.toUpperCase() && (!tipo || e.tipo === tipo))
+    || (E.cat.equipos || []).find(e => e.ident && e.ident === pos); // por si escanean una etiqueta vieja con el ID
+  if (!eq){ E.msg = 'No encontré el equipo "' + pos + '". Probá con "Buscar sin QR".'; E.pantalla = 'inicio'; dibujar(); return; }
+  E.control = { eq, resp: {}, obs: '', foto: '', cambio: null, editar: false, reemplazo: false };
+  E.pantalla = 'control'; E.msg = ''; dibujar();
+}
+async function guardarControl(){
+  const c = E.control, rut = E.cat.rutinas[c.eq.tipo];
+  const hayNo = !c.vacio && rut.some(([k]) => c.resp[k] === 'NO');
+  if (!c.vacio){
+    const faltan = rut.filter(([k]) => !c.resp[k]);
+    if (faltan.length){ E.msg = 'Falta responder: ' + faltan.map(x => x[1]).join(', ') + '.'; dibujar(); return; }
+    if (hayNo && !c.obs.trim()){ E.msg = 'Hay un NO: escribí una observación corta.'; dibujar(); document.getElementById('c-obs').focus(); return; }
+    if (c.cambio && c.reemplazo && !c.cambio.motivo){ E.msg = 'Elegí el motivo del reemplazo.'; dibujar(); return; }
+    if (c.cambio && !String(c.cambio.ident || '').trim()){ E.msg = 'Completá el ID nuevo o cancelá el cambio.'; dibujar(); return; }
+  }
+  const r = { uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: c.eq.tipo, pos: c.eq.pos,
+    bombero: E.sesion.id, resp: c.vacio ? {} : c.resp, obs: c.obs.trim(), foto: c.foto, cambio: c.vacio ? null : c.cambio || null, vacio: !!c.vacio };
+  await DB.encolar(r);
+  // El cambio de equipo se ve enseguida en la tablet, aunque no haya señal
+  if (r.cambio){ Object.assign(c.eq, Object.fromEntries(Object.entries(r.cambio).filter(([k, v]) => k !== 'reemplazo' && k !== 'motivo' && v))); await DB.set('catalogo', E.cat); }
+  E.cola = await DB.cola();
+  toast(c.vacio ? 'Guardado · se avisa al supervisor' : r.cambio && c.reemplazo ? 'Reemplazo guardado · queda una línea para el supervisor' : hayNo ? 'Guardado · se propone correctivo al supervisor' : 'Guardado');
+  E.control = null; E.pantalla = 'escanear'; E.msg = '';
+  dibujar(); sincronizar();
+}
+function fotoElegida(input){
+  const f = input.files && input.files[0]; if (!f) return;
+  const img = new Image(), url = URL.createObjectURL(f);
+  img.onload = () => {
+    const m = 1024, k = Math.min(1, m / Math.max(img.width, img.height)), cv = document.createElement('canvas');
+    cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+    E.control.foto = cv.toDataURL('image/jpeg', 0.7); URL.revokeObjectURL(url); dibujar();
+  };
+  img.src = url;
+}
+
+/* ---------- pantallas ---------- */
+function barra(titulo, sub, boton){
+  return `<div class="bar"><div class="t"><b>${esc(titulo)}</b><small>${sub}</small></div>${boton || ''}</div>
+  <div class="net ${E.online ? 'ok' : ''}"><span>● ${E.online ? (E.enviando ? 'Con señal · enviando…' : 'Con señal') : 'Sin señal · trabajando en la tablet'}</span>
+  <span>${E.cola.length ? `${E.cola.length} sin enviar${E.online && !E.enviando ? ' · <button data-a="sync">Enviar</button>' : ''}` : 'Todo enviado'}</span></div>`;
+}
+const aviso = () => E.msg ? `<div class="aviso err" role="alert">${esc(E.msg)}</div>` : '';
+function vVincular(){
+  return `<div class="bar"><div class="t"><b>OT preventivas</b><small>Tablet sin vincular</small></div></div><main>
+  <h2>Vincular esta tablet</h2>
+  <p>Pedile al supervisor un código en el mini ERP (Mantenimiento preventivo › App de preventivos › Tablets) y escribilo acá. Se hace una sola vez y necesita señal.</p>
+  ${aviso()}
+  <label class="f">Código de 6 letras<input id="v-cod" maxlength="6" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase;font-size:24px;letter-spacing:4px;text-align:center"></label>
+  <button class="big" data-a="vincular" ${E.online ? '' : 'disabled'}>${E.online ? 'VINCULAR' : 'Sin señal: buscá un lugar con internet'}</button></main>`;
+}
+function vLogin(){
+  const B = (E.cat.bomberos || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre));
+  return barra('OT preventivas · ' + E.tablet.ed, 'Nadie ingresado') + `<main>
+  ${aviso()}
+  ${E.bomberoPin ? `<h2>${esc((B.find(b => b.id === E.bomberoPin) || {}).nombre || '')}: tu PIN</h2>
+    <div class="pin">${[0, 1, 2, 3].map(i => `<i class="${i < E.pin.length ? 'f' : ''}">${i < E.pin.length ? '•' : ''}</i>`).join('')}</div>
+    <div class="tecl">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-a="tecla" data-n="${n}">${n}</button>`).join('')}<button data-a="pin-volver">Volver</button><button data-a="tecla" data-n="0">0</button><button data-a="borrar" aria-label="Borrar">⌫</button></div>`
+  : `<div class="cam"><video id="video" playsinline muted></video><div class="marco"></div><span id="cam-aviso">Escaneá tu tarjeta de bombero</span></div>
+    <div class="o">— o, si no tenés la tarjeta —</div>
+    <label class="f">Bombero<select id="l-bomb"><option value="">Elegí tu nombre…</option>${B.map(b => `<option value="${esc(b.id)}">${esc(b.nombre)}</option>`).join('')}</select></label>
+    ${B.length ? '' : '<div class="aviso err">No hay bomberos cargados para esta tablet. El supervisor los da de alta en el mini ERP: aparecen solos cuando la tablet tiene señal.</div>'}`}
+  <p class="o">La sesión se cierra sola tras ${MIN_INACTIVO} min sin uso.</p></main>`;
+}
+function vInicio(){
+  const tarjetas = Object.keys(E.cat.tipos || {}).map(tipo => {
+    const tot = equiposDe(tipo).length, h = Object.keys(hechosDe(tipo)).length;
+    if (!tot) return '';
+    const conObs = E.cola.filter(r => r.tipo === tipo && Object.values(r.resp).includes('NO')).length;
+    return `<div class="card"><div class="t">${esc(E.cat.tipos[tipo])} · ${nombreQ(hoyIso())}</div>
+      <div class="m">OT ${esc(ronda(tipo, E.tablet.ed, hoyIso()))} · ${tot} equipos</div>
+      <div class="prog"><i style="width:${Math.round(h / tot * 100)}%"></i></div>
+      <div class="m" style="margin-top:5px"><b>${h} de ${tot}</b>${h >= tot ? ' <span class="pill p-ok">Completa</span>' : ''}${conObs ? ` · <span class="pill p-w">${conObs} con observación sin enviar</span>` : ''}</div></div>`;
+  }).join('');
+  return barra('Hola, ' + E.sesion.nombre, esc(E.tablet.nombre) + ' · ' + esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + `<main>
+  ${aviso()}
+  ${tarjetas || '<div class="aviso err">Esta tablet todavía no tiene equipos. Tocá "Actualizar" con señal.</div>'}
+  <p class="o">Datos del ${E.cat.bajado ? fmtD(E.cat.bajado) + ' ' + E.cat.bajado.slice(11, 16) : '–'} · se actualizan solos con señal</p>
+  <div style="flex:1"></div>
+  <button class="big" data-a="escanear">ESCANEAR QR DEL EQUIPO</button>
+  <button class="big sec" data-a="buscar">Buscar sin QR (etiqueta rota)</button></main>`;
+}
+function vEscanear(){
+  return barra('Escanear equipo', esc(E.sesion.nombre), '<button data-a="inicio">Volver</button>') + `<main>
+  ${aviso()}
+  <div class="cam"><video id="video" playsinline muted></video><div class="marco"></div><span id="cam-aviso">Apuntá al QR de la posición</span></div>
+  <button class="big sec" data-a="buscar">Buscar sin QR (etiqueta rota)</button></main>`;
+}
+function vBuscar(){
+  const q = E.q.trim().toUpperCase(), h = hechosDe(E.tipo);
+  const L = equiposDe(E.tipo).filter(e => !q || [e.pos, e.piso, e.ubic, e.ident].some(x => String(x || '').toUpperCase().includes(q))).slice(0, 80);
+  return barra('Buscar sin QR', esc(E.sesion.nombre), '<button data-a="inicio">Volver</button>') + `<main>
+  <div class="seg">${Object.keys(E.cat.tipos).map(t => `<button data-a="tipo" data-t="${t}" aria-pressed="${t === E.tipo}">${esc(E.cat.tipos[t])}</button>`).join('')}</div>
+  <label class="f">Posición, piso o ubicación<input id="b-q" value="${esc(E.q)}" autocomplete="off" placeholder="Ej.: 3SS, M28/9, Pedraza"></label>
+  <div class="lista">${L.map(e => `<button class="row" data-a="elegir" data-pos="${esc(e.pos)}" data-t="${e.tipo}"><span><span class="mono">${esc(e.pos)}</span><br><span class="m">${esc(e.piso)} · ${esc(e.ubic)}</span></span>
+    <span>${h[e.pos] ? '<span class="pill p-ok">Hecho</span>' : ''}</span></button>`).join('') || '<p class="o">No hay equipos que coincidan.</p>'}</div></main>`;
+}
+// Ficha del equipo: todos los datos de la planilla, solo para ver. Vencimientos con color:
+// verde = más de 90 días, azul = vence en 90 días o menos, rojo = vencido.
+function vtoCelda(iso){
+  const d = diasHasta(iso);
+  if (d == null) return '<span class="m">sin dato</span>';
+  const [cl, txt] = d < 0 ? ['p-b', 'VENCIDO'] : d <= 90 ? ['p-i', 'en ' + d + ' días'] : ['p-ok', 'vigente'];
+  return `<b>${fmtD(iso)}</b> <span class="pill ${cl}">${txt}</span>`;
+}
+function fichaEquipo(e){
+  const filas = e.tipo === 'EXT'
+    ? [['Posición', `<span class="mono">${esc(e.pos)}</span>`], ['Piso', esc(e.piso)], ['Ubicación', esc(e.ubic)], ['ID', `<b>${esc(e.ident || '–')}</b>`],
+       ['Tipo de extintor', esc(e.clase || '–')], ['Peso', esc(e.peso || '–')],
+       ['Vencimiento de extintor', vtoCelda(e.vtoExt)], ['Vencimiento de carga', vtoCelda(e.vtoCarga)], ['Vencimiento de prueba hidráulica', vtoCelda(e.vtoPH)]]
+    : [['Posición', `<span class="mono">${esc(e.pos)}</span>`], ['Piso', esc(e.piso)], ['Ubicación', esc(e.ubic)], ['Código de manga', `<b>${esc(e.ident || '–')}</b>`],
+       ['Vencimiento de manga', vtoCelda(e.vtoManga)]];
+  return `<div class="ficha"><table class="fi">${filas.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('')}</table></div>`;
+}
+function vControl(){
+  const c = E.control, e = c.eq, rut = E.cat.rutinas[e.tipo], ya = hechosDe(e.tipo)[e.pos];
+  const EXT = e.tipo === 'EXT';
+  // Vencimientos del equipo que está en la posición; si alguno venció, se ofrece reemplazarlo en el momento
+  const vtos = EXT ? [['Carga', e.vtoCarga, 'Carga vencida'], ['Prueba hidráulica', e.vtoPH, 'Prueba hidráulica vencida'], ['Extintor', e.vtoExt, 'Carga vencida']] : [['Manga', e.vtoManga, 'Manga vencida']];
+  const vencido = vtos.find(([, iso]) => diasHasta(iso) != null && diasHasta(iso) < 0);
+  const abiertas = rut.filter(([k]) => E.cat.abiertas[e.tipo + '|' + e.pos + '|' + k]).map(([k, t]) => t + ' (' + E.cat.abiertas[e.tipo + '|' + e.pos + '|' + k] + ')');
+  const cm = c.cambio, motivos = (E.cat.motivos || {})[e.tipo] || ['Otro'];
+  const camposCambio = EXT
+    ? [['ident', c.reemplazo ? 'ID del extintor NUEVO' : 'ID del extintor'], ...(c.reemplazo ? [['clase', 'Tipo (ABC, CO2…)'], ['peso', 'Peso (ej.: 5kg)'], ['vtoCarga', 'Vence la carga', 'date'], ['vtoPH', 'Vence la prueba hidráulica', 'date'], ['vtoExt', 'Vence el extintor', 'date']] : [])]
+    : [['ident', c.reemplazo ? 'Código de la manga NUEVA' : 'Código de manga'], ...(c.reemplazo ? [['vtoManga', 'Vence la manga', 'date']] : [])];
+  const cabeza = barra((EXT ? 'Extintor ' : 'Nicho ') + e.pos, esc(e.piso) + ' · ' + esc(e.ubic), '<button data-a="cancelar">Cancelar</button>');
+  const foto = `<label class="btn" style="display:flex;align-items:center;justify-content:center;gap:8px">📷 ${c.foto ? 'Cambiar foto' : 'Sacar foto (opcional)'}<input type="file" accept="image/*" capture="environment" id="c-foto" hidden></label>
+    ${c.foto ? `<img class="foto" src="${c.foto}" alt="Foto">` : ''}`;
+  // Posición vacía: se lo llevaron y no hay reserva. Una sola línea para el supervisor, sin las preguntas.
+  if (c.vacio) return cabeza + `<main>
+    <div class="card"><div class="t">No hay equipo en esta posición</div><div class="m">Se avisa al supervisor. Si después se coloca uno, en la próxima recorrida usá "${EXT ? 'Reemplazar extintor' : 'Cambiar manga'}".</div></div>
+    <label class="f">Observación (opcional)<textarea id="c-obs" rows="2" maxlength="300" placeholder="Ej.: se retiró para recarga">${esc(c.obs)}</textarea></label>
+    ${foto}${aviso()}
+    <button class="btn" data-a="vacio-no">Volver: el equipo está</button>
+    <button class="big" data-a="guardar">GUARDAR Y SEGUIR</button></main>`;
+  return cabeza + `<main>
+  ${ya ? `<div class="aviso p-i">Ya se controló esta quincena (${fmtD(ya)} ${ya.slice(11, 16)}). Si lo guardás de nuevo, queda el último.</div>` : ''}
+  ${fichaEquipo(e)}
+  ${vencido && !cm ? `<button class="big" data-a="cambio" data-r="1" data-motivo="${esc(vencido[2])}" style="background:var(--bad)">Reemplazar ahora (${esc(vencido[2].toLowerCase())})</button>` : ''}
+  ${cm ? `<div class="card"><div class="t">${c.reemplazo ? (EXT ? 'Reemplazo con un extintor del depósito de reserva' : 'Cambio de manga') : 'Corregir ' + (EXT ? 'ID' : 'código de manga')}</div>
+      ${c.reemplazo ? `<div class="m">Sale: ${EXT ? 'ID ' + esc(e.ident || '–') + ' ' + esc([e.clase, e.peso].filter(Boolean).join(' ')) : 'manga ' + esc(e.ident || '–')}. Queda una línea para el supervisor${EXT ? ' (sugerido: DENAPOLI)' : ''}.</div>
+        <label class="f" style="margin-top:8px">Motivo<select data-cambio="motivo"><option value="">Elegí el motivo…</option>${motivos.map(m => `<option ${m === cm.motivo ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select></label>` : ''}
+      <div class="grid2" style="margin-top:8px">${camposCambio.map(([k, l, t]) => `<label class="f">${l}<input data-cambio="${k}" type="${t || 'text'}" value="${esc(cm[k] || '')}"></label>`).join('')}</div>
+      <button class="btn" data-a="cambio-no" style="margin-top:8px">Cancelar el cambio</button></div>`
+    : `<div class="grid2"><button class="btn" data-a="cambio" data-r="1">${EXT ? 'Reemplazar extintor' : 'Cambiar manga'}</button><button class="btn" data-a="cambio" data-r="0">Corregir ${EXT ? 'ID' : 'código'}</button></div>
+      <button class="btn" data-a="vacio">No hay equipo en esta posición</button>`}
+  <h2>${c.reemplazo ? 'Estado del equipo nuevo' : 'Estado del ' + (EXT ? 'extintor' : 'nicho')} <span class="m" style="font-weight:400">(SÍ = está bien)</span></h2>
+  <div>${rut.map(([k, t]) => `<div class="it"><span>${esc(t)}</span><span class="sn" role="group" aria-label="${esc(t)}">
+    <button class="si" data-a="resp" data-k="${k}" data-v="SI" aria-pressed="${c.resp[k] === 'SI'}">SÍ</button><button class="no" data-a="resp" data-k="${k}" data-v="NO" aria-pressed="${c.resp[k] === 'NO'}">NO</button></span></div>`).join('')}</div>
+  <button class="btn" data-a="todo-si">Todo SÍ</button>
+  <label class="f">Observación${rut.some(([k]) => c.resp[k] === 'NO') ? ' (obligatoria si hay un NO)' : ''}<textarea id="c-obs" rows="2" maxlength="300">${esc(c.obs)}</textarea></label>
+  ${foto}
+  ${rut.some(([k]) => c.resp[k] === 'NO') ? `<div class="aviso err">Se propone un correctivo al supervisor.${abiertas.length ? ' Ya hay uno abierto por: ' + esc(abiertas.join(', ')) + ' (no se repite).' : ''}</div>` : ''}
+  ${vencido && !c.reemplazo ? '<div class="aviso err">Está vencido: si no lo reemplazás ahora, se avisa al supervisor.</div>' : ''}
+  ${aviso()}
+  <button class="big" data-a="guardar">GUARDAR Y SEGUIR</button></main>`;
+}
+function dibujar(){
+  const app = document.getElementById('app'), antes = E.pantallaDibujada;
+  const v = { vincular: vVincular, login: vLogin, inicio: vInicio, escanear: vEscanear, buscar: vBuscar, control: vControl }[E.pantalla];
+  if (!v){ app.innerHTML = '<main><p class="o">Cargando…</p></main>'; return; }
+  // No redibujar mientras se escribe en un campo de texto (se perdería el foco)
+  const foco = document.activeElement && document.activeElement.id;
+  app.innerHTML = v();
+  if (foco && document.getElementById(foco)){ const el = document.getElementById(foco); el.focus(); if (el.setSelectionRange && el.value != null) try { el.setSelectionRange(el.value.length, el.value.length); } catch(x){} }
+  E.pantallaDibujada = E.pantalla;
+  const camara = (E.pantalla === 'escanear') || (E.pantalla === 'login' && !E.bomberoPin);
+  if (!camara) pararCamara();
+  else if (!CAM.stream || antes !== E.pantalla) iniciarCamara(E.pantalla === 'login' ? entrarConQR : txt => abrirControl(txt));
+  else { const vid = document.getElementById('video'); if (vid && CAM.stream){ vid.srcObject = CAM.stream; vid.play().catch(() => {}); } }
+}
+
+/* ---------- acciones ---------- */
+document.addEventListener('click', async ev => {
+  const t = ev.target.closest('[data-a]'); if (!t) return;
+  const a = t.dataset.a;
+  if (a === 'vincular'){
+    const cod = document.getElementById('v-cod').value.trim().toUpperCase();
+    if (cod.length !== 6){ E.msg = 'El código tiene 6 letras.'; dibujar(); return; }
+    t.disabled = true;
+    try {
+      const j = await enviar({ op: 'vincular', codigo: cod });
+      E.tablet = j.tablet; await DB.set('tablet', E.tablet);
+      await guardarCatalogo(await enviar(conClave({ op: 'bajar' })));
+      E.msg = ''; E.pantalla = 'login'; toast('Tablet vinculada');
+    } catch(e){ E.msg = e.message; }
+    dibujar(); sincronizar(); return;
+  }
+  if (a === 'tecla'){ if (E.pin.length < 4) E.pin += t.dataset.n; E.msg = ''; dibujar(); if (E.pin.length === 4) entrarConPin(); return; }
+  if (a === 'borrar'){ E.pin = E.pin.slice(0, -1); dibujar(); return; }
+  if (a === 'pin-volver'){ E.bomberoPin = ''; E.pin = ''; E.msg = ''; dibujar(); return; }
+  if (a === 'sync'){ sincronizar(true); return; }
+  if (a === 'salir'){ salir(); return; }
+  if (a === 'inicio'){ E.pantalla = 'inicio'; E.msg = ''; dibujar(); return; }
+  if (a === 'escanear'){ E.pantalla = 'escanear'; E.msg = ''; dibujar(); return; }
+  if (a === 'buscar'){ E.pantalla = 'buscar'; E.msg = ''; dibujar(); return; }
+  if (a === 'tipo'){ E.tipo = t.dataset.t; dibujar(); return; }
+  if (a === 'elegir'){ abrirControl(t.dataset.pos, t.dataset.t); return; }
+  if (a === 'cancelar'){ E.control = null; E.pantalla = 'inicio'; E.msg = ''; dibujar(); return; }
+  if (a === 'resp'){ E.control.resp[t.dataset.k] = t.dataset.v; E.msg = ''; dibujar(); return; }
+  if (a === 'todo-si'){ E.cat.rutinas[E.control.eq.tipo].forEach(([k]) => { E.control.resp[k] = 'SI'; }); dibujar(); return; }
+  if (a === 'cambio'){ E.control.reemplazo = t.dataset.r === '1'; E.control.cambio = { reemplazo: E.control.reemplazo, ident: '', motivo: t.dataset.motivo || '' }; dibujar(); return; }
+  if (a === 'vacio'){ E.control.vacio = true; E.msg = ''; dibujar(); return; }
+  if (a === 'vacio-no'){ E.control.vacio = false; dibujar(); return; }
+  if (a === 'cambio-no'){ E.control.cambio = null; E.control.reemplazo = false; dibujar(); return; }
+  if (a === 'guardar'){ guardarControl(); return; }
+});
+document.addEventListener('input', ev => {
+  const el = ev.target;
+  if (el.id === 'c-obs') E.control.obs = el.value;
+  else if (el.dataset.cambio) E.control.cambio[el.dataset.cambio] = el.value;
+  else if (el.id === 'b-q'){ E.q = el.value; dibujar(); }
+});
+document.addEventListener('change', ev => {
+  const el = ev.target;
+  if (el.id === 'l-bomb' && el.value){ E.bomberoPin = el.value; E.pin = ''; E.msg = ''; dibujar(); }
+  if (el.id === 'c-foto') fotoElegida(el);
+});
+// Actualización automática: manda lo pendiente y baja bomberos, equipos y avance. Sin botón: pasa sola cada vez que hay señal.
+async function actualizarSola(){
+  if (!navigator.onLine || !E.tablet || E.enviando) return;
+  await sincronizar(); await bajar();
+  // Solo se redibuja donde no se está cargando nada (el control de un equipo no se toca)
+  if (E.pantalla === 'login' || E.pantalla === 'inicio' || E.pantalla === 'buscar') dibujar();
+}
+window.addEventListener('online', () => { E.online = true; dibujar(); actualizarSola(); });
+window.addEventListener('offline', () => { E.online = false; dibujar(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') actualizarSola(); }); // al volver a abrir la app
+setInterval(() => { if (navigator.onLine && E.cola.length) sincronizar(); }, 60000);
+// Cada 2 minutos; si la tablet todavía no tiene bomberos, cada 20 segundos
+setInterval(() => { if (E.pantalla === 'login' && !(E.cat && E.cat.bomberos || []).length) actualizarSola(); }, 20000);
+setInterval(actualizarSola, 120000);
+
+/* ---------- arranque ---------- */
+(async () => {
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); // que el navegador no borre lo guardado
+  E.tablet = await DB.get('tablet') || null;
+  E.cat = await DB.get('catalogo') || null;
+  E.cola = await DB.cola();
+  try { E.sesion = JSON.parse(sessionStorage.getItem('sesion')); } catch(e){}
+  if (!E.tablet || !E.cat){ E.pantalla = 'vincular'; dibujar(); return; }
+  if (E.sesion && !(E.cat.bomberos || []).some(b => b.id === E.sesion.id)) E.sesion = null;
+  E.pantalla = E.sesion ? 'inicio' : 'login';
+  dibujar();
+  sincronizar().then(bajar).then(dibujar);
+})();
+window.__E = E; window.__app = { abrirControl, entrarConQR, dibujar, DB }; // para las pruebas
+})();
+</script>
+</body></html>
