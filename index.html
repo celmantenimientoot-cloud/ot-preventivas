@@ -478,7 +478,8 @@ function vOt(){
   ${cerrada ? `<div class="aviso p-i">${o.estado === 'hecha' ? 'Esta OT ya está terminada y enviada.' : 'Terminada: se envía sola cuando haya señal.'} Si hay que corregir algo, avisá al supervisor.</div>` : ''}
   ${partes}${equipos}
   <div class="card"><div class="t">${esc(e.nombre || e.cod)}</div><div class="m" id="ot-prog-m">${esc(e.cod || '')} ${e.cod ? '·' : ''} ${hE} de ${nE} tareas</div><div class="prog"><i id="ot-prog-i" style="width:${nE ? Math.round(hE / nE * 100) : 0}%"></i></div></div>
-  ${cerrada ? '' : '<button class="btn" data-a="todo-ok">Marcar todo ✔ (después corrijo lo que tenga observación)</button>'}
+  ${cerrada ? '' : `<div class="grid2"><button class="btn" data-a="todo-ok">Marcar todo ✔</button><button class="btn" data-a="todo-borrar" ${hE ? '' : 'disabled'}>Desmarcar todo este equipo</button></div>
+    <p class="m" style="margin:0">Para desmarcar una sola tarea, tocá de nuevo el ✔ o la ✖.</p>`}
   <div>${html}</div>
   ${anuales.length ? `<details><summary class="m">${anuales.length} tareas anuales: no se hacen esta semana</summary>${anuales.map(it => `<div class="it2 m">${esc(it.t)}</div>`).join('')}</details>` : ''}
   <label class="f">Observación general de la OT (opcional)<textarea id="ot-obs" rows="2" maxlength="500" ${cerrada ? 'disabled' : ''}>${esc(b.obs)}</textarea></label>
@@ -552,10 +553,20 @@ document.addEventListener('click', async ev => {
   if (a === 'abrir-ot'){ E.ot = { id: t.dataset.id, parte: 0, eq: 0 }; E.pantalla = 'ot'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'parte'){ E.ot.parte = +t.dataset.i; E.ot.eq = 0; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'equipo'){ E.ot.eq = +t.dataset.i; dibujar(); window.scrollTo(0, 0); return; }
-  if (a === 'tr'){ const r = borrador(E.ot.id).resp; r[t.dataset.k] = Object.assign(r[t.dataset.k] || {}, { e: t.dataset.v }); E.msg = ''; guardarBorrador(); dibujar(); return; }
+  if (a === 'tr'){ // tocar de nuevo el mismo botón lo desmarca (las mediciones y la observación escritas se mantienen)
+    const r = borrador(E.ot.id).resp, v = r[t.dataset.k] = r[t.dataset.k] || {};
+    if (v.e === t.dataset.v) delete v.e; else v.e = t.dataset.v;
+    E.msg = ''; guardarBorrador(); dibujar(); return;
+  }
   if (a === 'todo-ok'){
     const o = T_().ots.find(x => x.id === E.ot.id), ru = T_().rutinas[o.rutina], r = borrador(o.id).resp;
     ru.def.partes[E.ot.parte].secciones.forEach(s => s.items.filter(tocaTarea(ru, o)).forEach(it => { const k = claveT(E.ot.parte, E.ot.eq, it.id); r[k] = Object.assign(r[k] || {}, { e: (r[k] || {}).e || 'si' }); }));
+    guardarBorrador(); dibujar(); return;
+  }
+  if (a === 'todo-borrar'){
+    if (!confirm('¿Desmarcar todas las tareas de este equipo? Las mediciones y observaciones escritas se borran también.')) return;
+    const r = borrador(E.ot.id).resp, pre = E.ot.parte + '|' + E.ot.eq + '|';
+    Object.keys(r).forEach(k => { if (k.startsWith(pre)) delete r[k]; });
     guardarBorrador(); dibujar(); return;
   }
   if (a === 'terminar'){ terminarOt(); return; }
