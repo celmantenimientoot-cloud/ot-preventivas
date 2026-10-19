@@ -395,7 +395,7 @@ function vInicio(){
   const resDep = depT.length ? `<div class="card"><div class="t">Depósito de reserva</div><div class="m"><b>${depOk} ${depOk === 1 ? 'disponible' : 'disponibles'}</b>${depVac ? ` · <span class="pill p-w">${depVac} ${depVac === 1 ? 'posición vacía' : 'posiciones vacías'}</span>` : ''}${depRec ? ` · <span class="pill p-i">${depRec} a recargar</span>` : ''}${depT.length - depOk - depVac - depRec ? ` · <span class="pill p-b">${depT.length - depOk - depVac - depRec} ${depT.length - depOk - depVac - depRec === 1 ? 'vencido' : 'vencidos'}</span>` : ''}</div></div>` : '';
   return barra('Hola, ' + E.sesion.nombre, esc(E.tablet.nombre) + ' · ' + esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + `<main>
   ${aviso()}
-  ${nSust ? `<button class="row" data-a="ver-sust" style="border-color:var(--warn)"><span><b>${nSust} ${nSust === 1 ? 'nicho' : 'nichos'} con manga SUSTITUTA</b><br><span class="m">Esperan la manga de Extinred · tocá para ver</span></span><span>›</span></button>` : ''}
+  ${nSust ? `<button class="card" data-a="ver-sust" style="display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;border-color:var(--warn);background:var(--warn-soft);cursor:pointer"><span><b>${nSust} ${nSust === 1 ? 'nicho' : 'nichos'} con manga SUSTITUTA</b><br><span class="m">Esperan la manga de Extinred · tocá para ver</span></span><span>›</span></button>` : ''}
   ${tarjetas || '<div class="aviso err">Esta tablet todavía no tiene equipos. Tocá "Actualizar" con señal.</div>'}
   ${resDep}
   <p class="o">Datos del ${E.cat.bajado ? fmtD(E.cat.bajado) + ' ' + E.cat.bajado.slice(11, 16) : '–'} · se actualizan solos con señal</p>
