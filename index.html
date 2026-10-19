@@ -392,14 +392,16 @@ function tareaLista(v, it){
   return it.rst ? ['r', 's', 't'].every(c => String(v[c] || '').trim()) : !!String(v.val || '').trim();
 }
 const borrador = id => (E.borr[id] = E.borr[id] || { resp: {}, obs: '' });
-function equipoListo(ot, ru, pi, ei){
-  const b = borrador(ot.id), toca = tocaTarea(ru, ot);
-  return ru.def.partes[pi].secciones.every(s => s.items.filter(toca).every(it => tareaLista(b.resp[claveT(pi, ei, it.id)], it)));
+// Equipo guardado: ya está en el servidor (lo hizo él u otro técnico) o en la cola del celular sin enviar
+function guardadoPor(ot, pi, ei){
+  if ((ot.hechos || {})[pi + '|' + ei]) return ot.hechos[pi + '|' + ei];
+  const pre = pi + '|' + ei + '|';
+  return E.cola.some(r => r.tipo === 'TERMO' && r.otsem === ot.id && Object.keys(r.resp || {}).some(k => k.startsWith(pre))) ? 'vos (sin enviar)' : '';
 }
 function avanceOt(ot){
   const ru = T_().rutinas[ot.rutina]; if (!ru) return [0, 0];
   let h = 0, t = 0;
-  ru.def.partes.forEach((p, pi) => p.equipos.forEach((e, ei) => { t++; if (equipoListo(ot, ru, pi, ei)) h++; }));
+  ru.def.partes.forEach((p, pi) => p.equipos.forEach((e, ei) => { t++; if (ot.estado === 'hecha' || guardadoPor(ot, pi, ei)) h++; }));
   return [h, t];
 }
 const enCola = id => E.cola.some(r => r.tipo === 'TERMO' && r.otsem === id);
@@ -439,14 +441,18 @@ function vLoginTec(){
     <div class="tecl">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-a="tecla" data-n="${n}">${n}</button>`).join('')}<button data-a="usar-tarjeta">Tarjeta</button><button data-a="tecla" data-n="0">0</button><button data-a="borrar" aria-label="Borrar">⌫</button></div>`}
   </main>`;
 }
+const etiquetaFrec = ru => ru.def.partes.every(p => p.secciones.every(s => s.items.every(it => it.frec >= 360))) ? 'Anual' : 'Semestral';
 function vInicioTec(){
   const L = T_().ots.slice().sort((a, b) => (a.estado === 'hecha') - (b.estado === 'hecha') || (a.semana < b.semana ? -1 : 1));
   const card = o => {
-    const ru = T_().rutinas[o.rutina] || {}, [h, t] = avanceOt(o), enviando = enCola(o.id);
-    return `<button class="card" data-a="abrir-ot" data-id="${esc(o.id)}" style="text-align:left;width:100%;cursor:pointer" ${o.estado === 'hecha' && !enviando ? '' : ''}>
-      <div class="t">${esc(o.nombre)} ${ru.sem ? '<span class="pill p-i">Semestral</span>' : ''} ${o.estado === 'hecha' ? '<span class="pill p-ok">Hecha</span>' : enviando ? '<span class="pill p-w">Terminada · sin enviar</span>' : h ? '<span class="pill p-w">En curso</span>' : ''}</div>
-      <div class="m">${esc(o.semanaTxt)} · piso ${esc(o.piso || '–')} · ${t} equipo${t === 1 ? '' : 's'}</div>
-      ${o.estado === 'hecha' || enviando ? '' : `<div class="prog"><i style="width:${t ? Math.round(h / t * 100) : 0}%"></i></div>`}</button>`;
+    const ru = T_().rutinas[o.rutina] || {}, [h, t] = avanceOt(o), sinEnviar = enCola(o.id);
+    const pill = o.estado === 'hecha' ? '<span class="pill p-ok">Hecha</span>' : h === t ? '<span class="pill p-w">Completa · sin enviar</span>'
+      : h ? `<span class="pill p-w">En curso · ${h} de ${t}</span>` : '';
+    return `<button class="card" data-a="abrir-ot" data-id="${esc(o.id)}" style="text-align:left;width:100%;cursor:pointer">
+      <div class="t">${esc(o.nombre)} ${ru.sem ? `<span class="pill p-i">${etiquetaFrec(ru)}</span>` : ''} ${pill}</div>
+      <div class="m">${esc(o.semanaTxt)} · piso ${esc(o.piso || '–')} · ${t} equipo${t === 1 ? '' : 's'}${sinEnviar ? ' · hay equipos sin enviar' : ''}</div>
+      ${(o.con || []).length ? `<div class="m">Con: <b>${esc(o.con.join(', '))}</b></div>` : ''}
+      ${o.estado === 'hecha' ? '' : `<div class="prog"><i style="width:${t ? Math.round(h / t * 100) : 0}%"></i></div>`}</button>`;
   };
   return barra('Hola, ' + E.sesion.nombre, 'Mis OT · ' + esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + `<main>${aviso()}
   ${L.length ? L.map(card).join('') : '<div class="aviso p-i">No tenés OT asignadas por ahora. Se actualiza sola cuando hay señal.</div>'}
@@ -455,59 +461,70 @@ function vInicioTec(){
 function vOt(){
   const c = E.ot, o = T_().ots.find(x => x.id === c.id), ru = o && T_().rutinas[o.rutina];
   if (!o || !ru){ E.pantalla = 'inicio'; return vInicioTec(); }
-  const b = borrador(o.id), toca = tocaTarea(ru, o), p = ru.def.partes[c.parte], e = p.equipos[c.eq], cerrada = o.estado === 'hecha' || enCola(o.id);
+  const b = borrador(o.id), toca = tocaTarea(ru, o), p = ru.def.partes[c.parte], e = p.equipos[c.eq];
+  const por = o.estado === 'hecha' ? (guardadoPor(o, c.parte, c.eq) || 'la OT ya está hecha') : guardadoPor(o, c.parte, c.eq), cerrado = !!por;
   const [h, t] = avanceOt(o), ab = T_().abiertas;
   const chips = (L, sel, a, listo) => L.length > 1 ? `<div class="chips">${L.map((x, i) => `<button data-a="${a}" data-i="${i}" aria-pressed="${i === sel}" class="${listo(i) ? 'hecho' : ''}">${esc(x)}</button>`).join('')}</div>` : '';
-  const partes = chips(ru.def.partes.map(x => x.nombre || 'Equipos'), c.parte, 'parte', i => ru.def.partes[i].equipos.every((x, ei) => equipoListo(o, ru, i, ei)));
-  const equipos = chips(p.equipos.map(x => x.nombre || x.cod), c.eq, 'equipo', i => equipoListo(o, ru, c.parte, i));
+  const partes = chips(ru.def.partes.map(x => x.nombre || 'Equipos'), c.parte, 'parte', i => ru.def.partes[i].equipos.every((x, ei) => guardadoPor(o, i, ei)));
+  const equipos = chips(p.equipos.map(x => x.nombre || x.cod), c.eq, 'equipo', i => guardadoPor(o, c.parte, i));
   let html = '';
-  p.secciones.forEach(s => {
+  if (!cerrado) p.secciones.forEach(s => {
     const items = s.items.filter(toca); if (!items.length) return;
     html += `<div class="sec">${esc(s.titulo)}</div>`;
     items.forEach(it => {
       const k = claveT(c.parte, c.eq, it.id), v = b.resp[k] || {}, abierta = ab[o.rutina + '|' + (e.nombre || e.cod) + '|' + c.parte + '.' + it.id];
       html += `<div class="it2"><div class="fila"><span>${esc(it.t)}${it.nota ? `<br><span class="m">${esc(it.nota)}</span>` : ''}${abierta ? `<br><span class="pill p-w">Ya informado: ${esc(abierta)}</span>` : ''}</span>
-        <span class="sn"><button class="si" data-a="tr" data-k="${k}" data-v="si" aria-pressed="${v.e === 'si'}" aria-label="Sin observación" ${cerrada ? 'disabled' : ''}>✔</button><button class="no" data-a="tr" data-k="${k}" data-v="no" aria-pressed="${v.e === 'no'}" aria-label="Con observación" ${cerrada ? 'disabled' : ''}>✖</button></span></div>
-        ${it.med ? `<div class="med">${(it.rst ? ['r', 's', 't'] : ['val']).map(f => `<label>${f === 'val' ? 'Valor' : f.toUpperCase()}<input inputmode="decimal" data-tk="${k}" data-f="${f}" value="${esc(v[f] || '')}" ${cerrada ? 'disabled' : ''}></label>`).join('')}</div>` : ''}
-        ${v.e === 'no' ? `<textarea data-tk="${k}" data-f="obs" rows="2" maxlength="300" placeholder="¿Qué observaste? (obligatorio)" ${cerrada ? 'disabled' : ''}>${esc(v.obs || '')}</textarea>` : ''}</div>`;
+        <span class="sn"><button class="si" data-a="tr" data-k="${k}" data-v="si" aria-pressed="${v.e === 'si'}" aria-label="Sin observación">✔</button><button class="no" data-a="tr" data-k="${k}" data-v="no" aria-pressed="${v.e === 'no'}" aria-label="Con observación">✖</button></span></div>
+        ${it.med ? `<div class="med">${(it.rst ? ['r', 's', 't'] : ['val']).map(f => `<label>${f === 'val' ? 'Valor' : f.toUpperCase()}<input inputmode="decimal" data-tk="${k}" data-f="${f}" value="${esc(v[f] || '')}"></label>`).join('')}</div>` : ''}
+        ${v.e === 'no' ? `<textarea data-tk="${k}" data-f="obs" rows="2" maxlength="300" placeholder="¿Qué observaste? (obligatorio)">${esc(v.obs || '')}</textarea>` : ''}</div>`;
     });
   });
   const anuales = ru.sem || o.anual ? [] : p.secciones.flatMap(s => s.items).filter(it => it.frec >= 360);
   const nE = p.secciones.reduce((n, s) => n + s.items.filter(toca).length, 0), hE = p.secciones.reduce((n, s) => n + s.items.filter(toca).filter(it => tareaLista(b.resp[claveT(c.parte, c.eq, it.id)], it)).length, 0);
+  const listo = hE === nE;
   return barra(o.nombre, esc(o.semanaTxt) + ' · piso ' + esc(o.piso || '–'), '<button data-a="inicio">Volver</button>') + `<main>
-  ${cerrada ? `<div class="aviso p-i">${o.estado === 'hecha' ? 'Esta OT ya está terminada y enviada.' : 'Terminada: se envía sola cuando haya señal.'} Si hay que corregir algo, avisá al supervisor.</div>` : ''}
+  ${o.estado === 'hecha' ? '<div class="aviso p-i">Esta OT ya está terminada. Si hay que corregir algo, avisá al supervisor.</div>' : ''}
+  ${(o.con || []).length && o.estado !== 'hecha' ? `<div class="aviso p-i">La compartís con <b>${esc(o.con.join(', '))}</b>. Repártanse los equipos: lo que guarda cada uno le aparece al otro cuando tiene señal.</div>` : ''}
   ${partes}${equipos}
-  <div class="card"><div class="t">${esc(e.nombre || e.cod)}</div><div class="m" id="ot-prog-m">${esc(e.cod || '')} ${e.cod ? '·' : ''} ${hE} de ${nE} tareas</div><div class="prog"><i id="ot-prog-i" style="width:${nE ? Math.round(hE / nE * 100) : 0}%"></i></div></div>
-  ${cerrada ? '' : `<div class="grid2"><button class="btn" data-a="todo-ok">Marcar todo ✔</button><button class="btn" data-a="todo-borrar" ${hE ? '' : 'disabled'}>Desmarcar todo este equipo</button></div>
+  <div class="card"><div class="t">${esc(e.nombre || e.cod)}</div>
+    ${cerrado ? `<div class="m">${esc(e.cod || '')} · <span class="pill p-ok">Guardado por ${esc(por)}</span></div>`
+    : `<div class="m" id="ot-prog-m">${esc(e.cod || '')} ${e.cod ? '·' : ''} ${hE} de ${nE} tareas</div><div class="prog"><i id="ot-prog-i" style="width:${nE ? Math.round(hE / nE * 100) : 0}%"></i></div>`}</div>
+  ${cerrado ? '<p class="o">Este equipo ya está guardado. Si hay que corregir algo, avisá al supervisor.</p>' : `<div class="grid2"><button class="btn" data-a="todo-ok">Marcar todo ✔</button><button class="btn" data-a="todo-borrar" ${hE ? '' : 'disabled'}>Desmarcar todo este equipo</button></div>
     <p class="m" style="margin:0">Para desmarcar una sola tarea, tocá de nuevo el ✔ o la ✖.</p>`}
   <div>${html}</div>
-  ${anuales.length ? `<details><summary class="m">${anuales.length} tareas anuales: no se hacen esta semana</summary>${anuales.map(it => `<div class="it2 m">${esc(it.t)}</div>`).join('')}</details>` : ''}
-  <label class="f">Observación general de la OT (opcional)<textarea id="ot-obs" rows="2" maxlength="500" ${cerrada ? 'disabled' : ''}>${esc(b.obs)}</textarea></label>
+  ${anuales.length && !cerrado ? `<details><summary class="m">${anuales.length} tareas anuales: no se hacen esta semana</summary>${anuales.map(it => `<div class="it2 m">${esc(it.t)}</div>`).join('')}</details>` : ''}
+  ${o.estado === 'hecha' ? '' : `<label class="f">Observación general de la OT (opcional, va con cada equipo que guardes)<textarea id="ot-obs" rows="2" maxlength="500">${esc(b.obs)}</textarea></label>`}
   ${aviso()}
-  ${cerrada ? '' : `<button class="big" id="ot-terminar" data-a="terminar" ${h === t ? '' : 'disabled'}>${h === t ? 'TERMINAR OT' : `Terminar OT (faltan ${t - h} de ${t} equipos)`}</button>`}</main>`;
+  ${cerrado ? '' : `<button class="big" id="ot-guardar" data-a="guardar-eq" ${listo ? '' : 'disabled'}>${listo ? 'GUARDAR ESTE EQUIPO' : `Guardar este equipo (faltan ${nE - hE} tareas)`}</button>`}
+  <p class="o">${h} de ${t} equipos guardados · la OT se cierra sola cuando están todos</p></main>`;
 }
 // Al escribir una medición: se actualiza el avance sin redibujar (para no perder el campo)
 function actualizarProgresoOt(){
   const c = E.ot, o = T_().ots.find(x => x.id === c.id), ru = o && T_().rutinas[o.rutina]; if (!ru) return;
   const b = borrador(o.id), toca = tocaTarea(ru, o), p = ru.def.partes[c.parte], e = p.equipos[c.eq];
-  const its = p.secciones.flatMap(s => s.items.filter(toca)), hE = its.filter(it => tareaLista(b.resp[claveT(c.parte, c.eq, it.id)], it)).length, [h, t] = avanceOt(o);
-  const m = document.getElementById('ot-prog-m'), i = document.getElementById('ot-prog-i'), bt = document.getElementById('ot-terminar');
+  const its = p.secciones.flatMap(s => s.items.filter(toca)), hE = its.filter(it => tareaLista(b.resp[claveT(c.parte, c.eq, it.id)], it)).length;
+  const m = document.getElementById('ot-prog-m'), i = document.getElementById('ot-prog-i'), bt = document.getElementById('ot-guardar');
   if (m) m.textContent = (e.cod ? e.cod + ' · ' : '') + hE + ' de ' + its.length + ' tareas';
   if (i) i.style.width = (its.length ? Math.round(hE / its.length * 100) : 0) + '%';
-  if (bt){ bt.disabled = h !== t; bt.textContent = h === t ? 'TERMINAR OT' : 'Terminar OT (faltan ' + (t - h) + ' de ' + t + ' equipos)'; }
+  if (bt){ bt.disabled = hE !== its.length; bt.textContent = hE === its.length ? 'GUARDAR ESTE EQUIPO' : 'Guardar este equipo (faltan ' + (its.length - hE) + ' tareas)'; }
 }
-async function terminarOt(){
-  const o = T_().ots.find(x => x.id === E.ot.id), b = borrador(o.id), ru = T_().rutinas[o.rutina], toca = tocaTarea(ru, o), resp = {};
-  // Solo lo que corresponde a esta OT (por si la rutina cambió mientras tanto)
-  ru.def.partes.forEach((p, pi) => p.equipos.forEach((e, ei) => p.secciones.forEach(s => s.items.filter(toca).forEach(it => { const k = claveT(pi, ei, it.id); if (b.resp[k]) resp[k] = b.resp[k]; }))));
+// Guarda el equipo que está en pantalla: va a la cola (se envía con señal) y pasa al siguiente que falte
+async function guardarEquipo(){
+  const c = E.ot, o = T_().ots.find(x => x.id === c.id), b = borrador(o.id), ru = T_().rutinas[o.rutina], toca = tocaTarea(ru, o), p = ru.def.partes[c.parte], resp = {};
+  p.secciones.forEach(s => s.items.filter(toca).forEach(it => { const k = claveT(c.parte, c.eq, it.id); if (b.resp[k]) resp[k] = b.resp[k]; }));
   const nNo = Object.values(resp).filter(v => v.e === 'no').length;
-  if (!confirm('¿Terminar la OT ' + o.nombre + '?' + (nNo ? ' Hay ' + nNo + ' tareas con observación: van al supervisor.' : ''))) return;
   await DB.encolar({ uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: 'TERMO', otsem: o.id, resp, obs: String(b.obs || '').trim(), tec: E.sesion.id });
-  delete E.borr[o.id]; await DB.set('borradores', E.borr);
+  Object.keys(resp).forEach(k => { delete b.resp[k]; });
+  await DB.set('borradores', E.borr);
   E.cola = await DB.cola();
-  toast(nNo ? 'OT terminada · ' + nNo + ' observaciones van al supervisor' : 'OT terminada');
-  E.ot = null; E.pantalla = 'inicio'; E.msg = '';
-  dibujar(); sincronizar();
+  // El siguiente equipo que falte (primero en este grupo, después en los otros)
+  let sig = null;
+  ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!sig && !guardadoPor(o, pi, ei) && (pi > c.parte || (pi === c.parte && ei > c.eq))) sig = [pi, ei]; }));
+  ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!sig && !guardadoPor(o, pi, ei)) sig = [pi, ei]; }));
+  const [h, t] = avanceOt(o);
+  toast((nNo ? 'Equipo guardado · ' + nNo + ' con observación van al supervisor' : 'Equipo guardado') + (h === t ? ' · OT completa' : ''));
+  if (sig){ c.parte = sig[0]; c.eq = sig[1]; } else { E.ot = null; E.pantalla = 'inicio'; }
+  E.msg = ''; dibujar(); window.scrollTo(0, 0); sincronizar();
 }
 
 function dibujar(){
@@ -569,7 +586,7 @@ document.addEventListener('click', async ev => {
     Object.keys(r).forEach(k => { if (k.startsWith(pre)) delete r[k]; });
     guardarBorrador(); dibujar(); return;
   }
-  if (a === 'terminar'){ terminarOt(); return; }
+  if (a === 'guardar-eq'){ guardarEquipo(); return; }
   if (a === 'tecla'){ if (esTec() && E.cat.bomberos[0]) E.bomberoPin = E.cat.bomberos[0].id; if (E.pin.length < 4) E.pin += t.dataset.n; E.msg = ''; dibujar(); if (E.pin.length === 4) entrarConPin(); return; }
   if (a === 'borrar'){ E.pin = E.pin.slice(0, -1); dibujar(); return; }
   if (a === 'pin-volver'){ E.bomberoPin = ''; E.pin = ''; E.msg = ''; dibujar(); return; }
