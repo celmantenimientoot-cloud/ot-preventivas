@@ -125,7 +125,9 @@ async function enviar(cuerpo){
 const conClave = c => Object.assign({ tablet: E.tablet.id, clave: E.tablet.clave }, c);
 async function guardarCatalogo(j){
   E.cat = { ahora: j.ahora, equipos: j.equipos, rutinas: j.rutinas, tipos: j.tipos, motivos: j.motivos || {}, hechos: j.hechos || {}, abiertas: j.abiertas || {}, bomberos: j.bomberos, bajado: ahoraIso(),
-    modo: j.modo || '', termo: j.termo || null };
+    modo: j.modo || '', termo: j.termo || null, deposito: j.deposito || '' };
+  (E.cola || []).forEach(r => depLocal(r)); // lo del depósito que todavía no se envió
+  (E.cola || []).filter(r => r.manga).forEach(r => { const eq = (E.cat.equipos || []).find(e => e.tipo === 'HID' && e.pos === r.pos); if (eq) mangaLocal(eq, r.manga, r.ts); });
   await DB.set('catalogo', E.cat);
   // Si al bombero lo dieron de baja, se le cierra la sesión (lo que ya guardó se envía igual)
   if (E.sesion && !E.cat.bomberos.some(b => b.id === E.sesion.id)){ salir(); toast('Tu usuario fue dado de baja: avisá al supervisor'); }
@@ -208,10 +210,60 @@ setInterval(() => { if (E.sesion && Date.now() - E.ultimoUso > (esTec() ? MIN_IN
 /* ---------- avance (servidor + lo que todavía está en la tablet) ---------- */
 function hechosDe(tipo){
   const id = ronda(tipo, E.tablet.ed, hoyIso()), h = Object.assign({}, (E.cat.hechos || {})[id] || {});
-  E.cola.forEach(r => { if (r.tipo === tipo && ronda(tipo, E.tablet.ed, r.ts.slice(0, 10)) === id) h[r.pos] = r.ts; });
+  E.cola.forEach(r => { if (!r.manga && !r.deposito && r.tipo === tipo && ronda(tipo, E.tablet.ed, r.ts.slice(0, 10)) === id) h[r.pos] = r.ts; });
   return h;
 }
 const equiposDe = tipo => (E.cat.equipos || []).filter(e => e.tipo === tipo);
+/* ---------- depósito de reserva de extintores (CEL: posiciones M4SSD) ----------
+   Se controlan como cualquier extintor. Al reemplazar un extintor de un piso se elige el del depósito: pasa con sus
+   datos al piso y el RETIRADO se guarda en esa posición del depósito, A RECARGAR, hasta que vuelve de DENAPOLI. */
+const DATOS_EXT = ['ident', 'clase', 'peso', 'vtoExt', 'vtoCarga', 'vtoPH'];
+const esDep = e => !!(e && e.tipo === 'EXT' && E.cat && E.cat.deposito && new RegExp(E.cat.deposito, 'i').test(e.pos));
+const depVacia = e => esDep(e) && e.estadoPos === 'vacia';
+const depRecargar = e => esDep(e) && e.estadoPos === 'recargar';
+const depFuera = e => depVacia(e) || depRecargar(e); // no se controlan ni se usan para reponer
+const depT_ = () => equiposDe('EXT').some(esDep);
+const vencidoExt = e => ['vtoCarga', 'vtoPH', 'vtoExt'].some(k => diasHasta(e[k]) != null && diasHasta(e[k]) < 0);
+const depDisponibles = (menos) => equiposDe('EXT').filter(e => esDep(e) && !depFuera(e) && e.ident && e.pos !== menos);
+function depLocal(r){
+  const eqs = (E.cat && E.cat.equipos) || [], fecha = fmtD(String(r.ts || ahoraIso()).slice(0, 10));
+  if (r.deposito){ const eq = eqs.find(e => e.tipo === 'EXT' && e.pos === r.pos); if (eq){ DATOS_EXT.forEach(k => { eq[k] = String(r.deposito[k] || '').trim(); }); eq.estadoPos = ''; eq.nota = 'Cargado el ' + fecha; } }
+  if (r.cambio && r.cambio.reemplazo && r.tipo === 'EXT'){
+    // El que se colocó sale del depósito (si se eligió de la lista); el retirado se guarda ahí (o en la primera vacía), A RECARGAR
+    const eq = eqs.find(e => e.tipo === 'EXT' && e.pos === r.pos), ret = r.cambio.retirado || {};
+    let dep = r.cambio.desde ? eqs.find(e => e.tipo === 'EXT' && e.pos === r.cambio.desde) : null;
+    if (dep && (depFuera(dep) || dep.ident !== r.cambio.ident)) dep = null;
+    if (eq && dep) DATOS_EXT.forEach(k => { eq[k] = dep[k]; });
+    const slot = esDep(eq) ? null : dep || eqs.filter(depVacia).sort((a, b) => a.pos.localeCompare(b.pos, 'es', { numeric: true }))[0];
+    if (slot){ DATOS_EXT.forEach(k => { slot[k] = ret[k] || ''; }); slot.estadoPos = 'recargar'; slot.nota = (r.cambio.motivo || 'Retirado') + ' · salió de ' + r.pos + ' el ' + fecha; }
+    else if (dep){ DATOS_EXT.forEach(k => { dep[k] = ''; }); dep.estadoPos = 'vacia'; dep.nota = 'Se usó en ' + r.pos + ' el ' + fecha; }
+  }
+  if (r.vacio){ const eq = eqs.find(e => e.tipo === r.tipo && e.pos === r.pos); if (esDep(eq) && !depFuera(eq)){ DATOS_EXT.forEach(k => { eq[k] = ''; }); eq.estadoPos = 'vacia'; eq.nota = 'Vacía en la recorrida del ' + fecha; } }
+}
+async function guardarDeposito(){
+  const c = E.control, d = c.deposito;
+  if (!String(d.ident || '').trim()){ E.msg = 'Escribí el ID del extintor.'; dibujar(); return; }
+  if (!d.vtoCarga){ E.msg = 'Completá el vencimiento de la carga.'; dibujar(); return; }
+  const r = { uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: 'EXT', pos: c.eq.pos,
+    bombero: E.sesion.id, resp: {}, deposito: Object.fromEntries(DATOS_EXT.map(k => [k, String(d[k] || '').trim()])) };
+  await DB.encolar(r);
+  depLocal(r); await DB.set('catalogo', E.cat);
+  E.cola = await DB.cola();
+  toast('Listo: ' + c.eq.pos + ' tiene el extintor ' + r.deposito.ident);
+  E.control = null; E.pantalla = 'escanear'; E.msg = '';
+  dibujar(); sincronizar();
+}
+function vDeposito(){
+  const c = E.control, e = c.eq, d = c.deposito;
+  const campos = [['ident', 'ID del extintor'], ['clase', 'Tipo (ABC, CO2…)'], ['peso', 'Peso (ej.: 5kg)'], ['vtoCarga', 'Vence la carga', 'date'], ['vtoPH', 'Vence la prueba hidráulica', 'date'], ['vtoExt', 'Vence el extintor', 'date']];
+  return barra('Depósito ' + e.pos, esc(e.piso) + ' · ' + esc(e.ubic), '<button data-a="cancelar">Cancelar</button>') + `<main>
+  <div class="card"><div class="t">Extintor que vuelve al depósito</div>
+    <div class="m">Copiá los datos de la etiqueta del extintor que trajo DENAPOLI.${depRecargar(e) ? ' Vienen los del que se llevaron: si trajeron otro extintor, cambiá el ID.' : ''}</div>
+    <div class="grid2" style="margin-top:8px">${campos.map(([k, l, t]) => `<label class="f">${l}<input data-dep="${k}" id="dep-${k}" type="${t || 'text'}" value="${esc(d[k] || '')}"></label>`).join('')}</div></div>
+  ${aviso()}
+  <button class="btn" data-a="dep-no">Volver</button>
+  <button class="big" data-a="dep-ok">GUARDAR EXTINTOR EN EL DEPÓSITO</button></main>`;
+}
 
 /* ---------- control de un equipo ---------- */
 function abrirControl(pos, tipo){
@@ -231,15 +283,58 @@ async function guardarControl(){
     if (c.cambio && c.reemplazo && !c.cambio.motivo){ E.msg = 'Elegí el motivo del reemplazo.'; dibujar(); return; }
     if (c.cambio && !String(c.cambio.ident || '').trim()){ E.msg = 'Completá el ID nuevo o cancelá el cambio.'; dibujar(); return; }
   }
+  if (c.cambio && c.reemplazo) c.cambio.retirado = Object.fromEntries(DATOS_EXT.map(k => [k, c.eq[k] || '']));
   const r = { uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: c.eq.tipo, pos: c.eq.pos,
     bombero: E.sesion.id, resp: c.vacio ? {} : c.resp, obs: c.obs.trim(), foto: c.foto, cambio: c.vacio ? null : c.cambio || null, vacio: !!c.vacio };
   await DB.encolar(r);
   // El cambio de equipo se ve enseguida en la tablet, aunque no haya señal
-  if (r.cambio){ Object.assign(c.eq, Object.fromEntries(Object.entries(r.cambio).filter(([k, v]) => k !== 'reemplazo' && k !== 'motivo' && v))); await DB.set('catalogo', E.cat); }
+  if (r.cambio){ depLocal(r); Object.assign(c.eq, Object.fromEntries(Object.entries(r.cambio).filter(([k, v]) => k !== 'reemplazo' && k !== 'motivo' && k !== 'desde' && k !== 'retirado' && v))); }
+  if (r.vacio) depLocal(r);
+  if (r.cambio || r.vacio) await DB.set('catalogo', E.cat);
   E.cola = await DB.cola();
   toast(c.vacio ? 'Guardado · se avisa al supervisor' : r.cambio && c.reemplazo ? 'Reemplazo guardado · queda una línea para el supervisor' : hayNo ? 'Guardado · se propone correctivo al supervisor' : 'Guardado');
   E.control = null; E.pantalla = 'escanear'; E.msg = '';
   dibujar(); sincronizar();
+}
+/* ---------- cambio de mangas (Extinred) ----------
+   Extinred se lleva la manga a la prueba hidráulica y deja una sustituta: el nicho queda SUSTITUTA.
+   Cuando vuelve, la manga trae un código nuevo y su vencimiento (mes y año: vale hasta el último día del mes). */
+const esSust = e => e && e.tipo === 'HID' && e.manga === 'sustituta';
+function mangaLocal(eq, m, ts){
+  if (m.accion === 'retiro'){ if (eq.manga !== 'sustituta') Object.assign(eq, { mangaRet: eq.ident, ident: '', vtoManga: '', manga: 'sustituta', mangaFec: String(ts || ahoraIso()).slice(0, 10) }); }
+  else if (m.accion === 'vuelve'){
+    const [y, mo] = String(m.vto).split('-').map(Number);
+    Object.assign(eq, { ident: String(m.ident).trim().toUpperCase(), vtoManga: y + '-' + String(mo).padStart(2, '0') + '-' + String(new Date(y, mo, 0).getDate()).padStart(2, '0'), manga: '', mangaRet: '', mangaFec: '' });
+  }
+}
+async function guardarManga(){
+  const c = E.control, m = c.manga;
+  if (m.accion === 'vuelve'){
+    if (!String(m.ident || '').trim()){ E.msg = 'Escribí el código de la manga nueva.'; dibujar(); return; }
+    if (!/^\d{4}-\d{2}$/.test(m.vto || '')){ E.msg = 'Elegí el mes y el año de vencimiento de la manga nueva.'; dibujar(); return; }
+  }
+  const r = { uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: 'HID', pos: c.eq.pos,
+    bombero: E.sesion.id, resp: {}, manga: { accion: m.accion, ident: String(m.ident || '').trim().toUpperCase(), vto: m.vto || '' } };
+  await DB.encolar(r);
+  mangaLocal(c.eq, r.manga, r.ts); await DB.set('catalogo', E.cat); // se ve enseguida, aunque no haya señal
+  E.cola = await DB.cola();
+  toast(m.accion === 'retiro' ? 'Listo: ' + c.eq.pos + ' queda con manga SUSTITUTA' : 'Listo: ' + c.eq.pos + ' tiene la manga ' + r.manga.ident);
+  E.control = null; E.pantalla = 'escanear'; E.msg = '';
+  dibujar(); sincronizar();
+}
+function vManga(){
+  const c = E.control, e = c.eq, m = c.manga;
+  return barra('Nicho ' + e.pos, esc(e.piso) + ' · ' + esc(e.ubic), '<button data-a="cancelar">Cancelar</button>') + `<main>
+  ${m.accion === 'retiro' ? `<div class="card"><div class="t">Extinred se lleva la manga</div>
+      <div class="m">Sale la manga <b>${esc(e.ident || '–')}</b>${e.vtoManga ? ' (vence ' + fmtD(e.vtoManga) + ')' : ''}. El nicho queda con manga <b>SUSTITUTA</b> hasta que vuelva con su código nuevo.</div></div>`
+    : `<div class="card"><div class="t">Volvió la manga de Extinred</div>
+      <div class="m">Se llevaron la <b>${esc(e.mangaRet || '–')}</b>${e.mangaFec ? ' el ' + fmtD(e.mangaFec) : ''}. Copiá el código y el vencimiento de la etiqueta de la manga que vuelve.</div>
+      <div class="grid2" style="margin-top:8px"><label class="f">Código de la manga nueva<input id="m-ident" data-manga="ident" value="${esc(m.ident || '')}" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase"></label>
+      <label class="f">Vence (mes y año)<input id="m-vto" data-manga="vto" type="month" value="${esc(m.vto || '')}"></label></div>
+      <div class="m" style="margin-top:6px">La manga vale hasta el último día de ese mes.</div></div>`}
+  ${aviso()}
+  <button class="btn" data-a="manga-no">Volver al control del nicho</button>
+  <button class="big" data-a="manga-ok">${m.accion === 'retiro' ? 'CONFIRMAR: QUEDA SUSTITUTA' : 'GUARDAR MANGA NUEVA'}</button></main>`;
 }
 function fotoElegida(input){
   const f = input.files && input.files[0]; if (!f) return;
@@ -287,17 +382,22 @@ function vLogin(){
 function vInicio(){
   if (esTec()) return vInicioTec();
   const tarjetas = Object.keys(E.cat.tipos || {}).map(tipo => {
-    const tot = equiposDe(tipo).length, h = Object.keys(hechosDe(tipo)).length;
+    const tot = equiposDe(tipo).filter(e => !depFuera(e)).length, h = Object.keys(hechosDe(tipo)).length;
     if (!tot) return '';
-    const conObs = E.cola.filter(r => r.tipo === tipo && Object.values(r.resp).includes('NO')).length;
+    const conObs = E.cola.filter(r => r.tipo === tipo && Object.values(r.resp || {}).includes('NO')).length;
     return `<div class="card"><div class="t">${esc(E.cat.tipos[tipo])} · ${nombreQ(hoyIso())}</div>
       <div class="m">OT ${esc(ronda(tipo, E.tablet.ed, hoyIso()))} · ${tot} equipos</div>
       <div class="prog"><i style="width:${Math.round(h / tot * 100)}%"></i></div>
       <div class="m" style="margin-top:5px"><b>${h} de ${tot}</b>${h >= tot ? ' <span class="pill p-ok">Completa</span>' : ''}${conObs ? ` · <span class="pill p-w">${conObs} con observación sin enviar</span>` : ''}</div></div>`;
   }).join('');
+  const nSust = equiposDe('HID').filter(esSust).length;
+  const depT = equiposDe('EXT').filter(esDep), depOk = depT.filter(e => !depFuera(e) && e.ident && !vencidoExt(e)).length, depVac = depT.filter(depVacia).length, depRec = depT.filter(depRecargar).length;
+  const resDep = depT.length ? `<div class="card"><div class="t">Depósito de reserva</div><div class="m"><b>${depOk} ${depOk === 1 ? 'disponible' : 'disponibles'}</b>${depVac ? ` · <span class="pill p-w">${depVac} ${depVac === 1 ? 'posición vacía' : 'posiciones vacías'}</span>` : ''}${depRec ? ` · <span class="pill p-i">${depRec} a recargar</span>` : ''}${depT.length - depOk - depVac - depRec ? ` · <span class="pill p-b">${depT.length - depOk - depVac - depRec} ${depT.length - depOk - depVac - depRec === 1 ? 'vencido' : 'vencidos'}</span>` : ''}</div></div>` : '';
   return barra('Hola, ' + E.sesion.nombre, esc(E.tablet.nombre) + ' · ' + esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + `<main>
   ${aviso()}
+  ${nSust ? `<button class="row" data-a="ver-sust" style="border-color:var(--warn)"><span><b>${nSust} ${nSust === 1 ? 'nicho' : 'nichos'} con manga SUSTITUTA</b><br><span class="m">Esperan la manga de Extinred · tocá para ver</span></span><span>›</span></button>` : ''}
   ${tarjetas || '<div class="aviso err">Esta tablet todavía no tiene equipos. Tocá "Actualizar" con señal.</div>'}
+  ${resDep}
   <p class="o">Datos del ${E.cat.bajado ? fmtD(E.cat.bajado) + ' ' + E.cat.bajado.slice(11, 16) : '–'} · se actualizan solos con señal</p>
   <div style="flex:1"></div>
   <button class="big" data-a="escanear">ESCANEAR QR DEL EQUIPO</button>
@@ -311,12 +411,14 @@ function vEscanear(){
 }
 function vBuscar(){
   const q = E.q.trim().toUpperCase(), h = hechosDe(E.tipo);
-  const L = equiposDe(E.tipo).filter(e => !q || [e.pos, e.piso, e.ubic, e.ident].some(x => String(x || '').toUpperCase().includes(q))).slice(0, 80);
+  const L = equiposDe(E.tipo).filter(e => !E.soloSust || esSust(e)).filter(e => !q || [e.pos, e.piso, e.ubic, e.ident, esSust(e) ? 'SUSTITUTA' : ''].some(x => String(x || '').toUpperCase().includes(q))).slice(0, 80);
+  const nSust = equiposDe('HID').filter(esSust).length;
   return barra('Buscar sin QR', esc(E.sesion.nombre), '<button data-a="inicio">Volver</button>') + `<main>
   <div class="seg">${Object.keys(E.cat.tipos).map(t => `<button data-a="tipo" data-t="${t}" aria-pressed="${t === E.tipo}">${esc(E.cat.tipos[t])}</button>`).join('')}</div>
   <label class="f">Posición, piso o ubicación<input id="b-q" value="${esc(E.q)}" autocomplete="off" placeholder="Ej.: 3SS, M28/9, Pedraza"></label>
+  ${E.tipo === 'HID' && (nSust || E.soloSust) ? `<button class="btn" data-a="solo-sust" aria-pressed="${!!E.soloSust}">${E.soloSust ? 'Ver todos los nichos' : 'Ver solo los ' + nSust + ' con manga sustituta'}</button>` : ''}
   <div class="lista">${L.map(e => `<button class="row" data-a="elegir" data-pos="${esc(e.pos)}" data-t="${e.tipo}"><span><span class="mono">${esc(e.pos)}</span><br><span class="m">${esc(e.piso)} · ${esc(e.ubic)}</span></span>
-    <span>${h[e.pos] ? '<span class="pill p-ok">Hecho</span>' : ''}</span></button>`).join('') || '<p class="o">No hay equipos que coincidan.</p>'}</div></main>`;
+    <span>${esSust(e) ? '<span class="pill p-w">Sustituta</span> ' : ''}${h[e.pos] ? '<span class="pill p-ok">Hecho</span>' : ''}</span></button>`).join('') || '<p class="o">No hay equipos que coincidan.</p>'}</div></main>`;
 }
 // Ficha del equipo: todos los datos de la planilla, solo para ver. Vencimientos con color:
 // verde = más de 90 días, azul = vence en 90 días o menos, rojo = vencido.
@@ -327,15 +429,30 @@ function vtoCelda(iso){
   return `<b>${fmtD(iso)}</b> <span class="pill ${cl}">${txt}</span>`;
 }
 function fichaEquipo(e){
+  if (depFuera(e)) return `<div class="ficha"><table class="fi">${[['Posición', `<span class="mono">${esc(e.pos)}</span>`], ['Lugar', 'Depósito de reserva'],
+      ['Estado', depRecargar(e) ? '<b>A RECARGAR</b> <span class="pill p-i">DENAPOLI</span>' : '<b>VACÍA</b>'],
+      ...(depRecargar(e) ? [['Extintor', `<b>ID ${esc(e.ident || '–')}</b> ${esc([e.clase, e.peso].filter(Boolean).join(' '))}`]] : []), ['Nota', esc(e.nota || '–')]]
+    .map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('')}</table></div>`;
   const filas = e.tipo === 'EXT'
-    ? [['Posición', `<span class="mono">${esc(e.pos)}</span>`], ['Piso', esc(e.piso)], ['Ubicación', esc(e.ubic)], ['ID', `<b>${esc(e.ident || '–')}</b>`],
+    ? [...(esDep(e) ? [['Lugar', 'Depósito de reserva']] : []), ['Posición', `<span class="mono">${esc(e.pos)}</span>`], ['Piso', esc(e.piso)], ['Ubicación', esc(e.ubic)], ['ID', `<b>${esc(e.ident || '–')}</b>`],
        ['Tipo de extintor', esc(e.clase || '–')], ['Peso', esc(e.peso || '–')],
        ['Vencimiento de extintor', vtoCelda(e.vtoExt)], ['Vencimiento de carga', vtoCelda(e.vtoCarga)], ['Vencimiento de prueba hidráulica', vtoCelda(e.vtoPH)]]
+    : esSust(e) ? [['Posición', `<span class="mono">${esc(e.pos)}</span>`], ['Piso', esc(e.piso)], ['Ubicación', esc(e.ubic)], ['Código de manga', '<b>SUSTITUTA</b> <span class="pill p-w">en Extinred</span>'],
+       ['Se llevaron', `<b>${esc(e.mangaRet || '–')}</b>${e.mangaFec ? ' el ' + fmtD(e.mangaFec) : ''}`]]
     : [['Posición', `<span class="mono">${esc(e.pos)}</span>`], ['Piso', esc(e.piso)], ['Ubicación', esc(e.ubic)], ['Código de manga', `<b>${esc(e.ident || '–')}</b>`],
        ['Vencimiento de manga', vtoCelda(e.vtoManga)]];
   return `<div class="ficha"><table class="fi">${filas.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('')}</table></div>`;
 }
 function vControl(){
+  if (E.control.manga) return vManga();
+  if (E.control.deposito) return vDeposito();
+  if (depFuera(E.control.eq)){
+    const e = E.control.eq;
+    return barra('Depósito ' + e.pos, esc(e.piso) + ' · ' + esc(e.ubic), '<button data-a="cancelar">Cancelar</button>') + `<main>
+    ${fichaEquipo(e)}
+    <div class="card"><div class="m">${depRecargar(e) ? 'Acá está guardado el extintor retirado, esperando que DENAPOLI lo recargue.' : 'Esta posición del depósito está vacía.'} No hace falta controlarla.</div></div>
+    <button class="big" data-a="dep-cargar">VOLVIÓ DE DENAPOLI: CARGAR EXTINTOR</button></main>`;
+  }
   const c = E.control, e = c.eq, rut = E.cat.rutinas[e.tipo], ya = hechosDe(e.tipo)[e.pos];
   const EXT = e.tipo === 'EXT';
   // Vencimientos del equipo que está en la posición; si alguno venció, se ofrece reemplazarlo en el momento
@@ -351,7 +468,8 @@ function vControl(){
     ${c.foto ? `<img class="foto" src="${c.foto}" alt="Foto">` : ''}`;
   // Posición vacía: se lo llevaron y no hay reserva. Una sola línea para el supervisor, sin las preguntas.
   if (c.vacio) return cabeza + `<main>
-    <div class="card"><div class="t">No hay equipo en esta posición</div><div class="m">Se avisa al supervisor. Si después se coloca uno, en la próxima recorrida usá "${EXT ? 'Reemplazar extintor' : 'Cambiar manga'}".</div></div>
+    ${esDep(e) ? '<div class="card"><div class="t">Posición del depósito sin extintor</div><div class="m">Queda VACÍA (no se avisa al supervisor). Ahí se guarda el próximo extintor que se retire de un piso.</div></div>' : ''}
+    <div class="card" ${esDep(e) ? 'hidden' : ''}><div class="t">No hay equipo en esta posición</div><div class="m">Se avisa al supervisor. Si después se coloca uno, en la próxima recorrida usá "${EXT ? 'Reemplazar extintor' : 'Cambiar manga'}".</div></div>
     <label class="f">Observación (opcional)<textarea id="c-obs" rows="2" maxlength="300" placeholder="Ej.: se retiró para recarga">${esc(c.obs)}</textarea></label>
     ${foto}${aviso()}
     <button class="btn" data-a="vacio-no">Volver: el equipo está</button>
@@ -361,11 +479,19 @@ function vControl(){
   ${fichaEquipo(e)}
   ${vencido && !cm ? `<button class="big" data-a="cambio" data-r="1" data-motivo="${esc(vencido[2])}" style="background:var(--bad)">Reemplazar ahora (${esc(vencido[2].toLowerCase())})</button>` : ''}
   ${cm ? `<div class="card"><div class="t">${c.reemplazo ? (EXT ? 'Reemplazo con un extintor del depósito de reserva' : 'Cambio de manga') : 'Corregir ' + (EXT ? 'ID' : 'código de manga')}</div>
-      ${c.reemplazo ? `<div class="m">Sale: ${EXT ? 'ID ' + esc(e.ident || '–') + ' ' + esc([e.clase, e.peso].filter(Boolean).join(' ')) : 'manga ' + esc(e.ident || '–')}. Queda una línea para el supervisor${EXT ? ' (sugerido: DENAPOLI)' : ''}.</div>
+      ${c.reemplazo ? `<div class="m">Sale: ${EXT ? 'ID ' + esc(e.ident || '–') + ' ' + esc([e.clase, e.peso].filter(Boolean).join(' ')) : 'manga ' + esc(e.ident || '–')}.${EXT && !esDep(e) && depT_() ? ' Se guarda en el depósito, A RECARGAR.' : ''} Queda una línea para el supervisor${EXT ? ' (sugerido: DENAPOLI)' : ''}.</div>
+        ${EXT && depDisponibles(e.pos).length ? `<div class="t" style="margin-top:10px">¿Cuál ponés del depósito?</div>
+          <div class="lista">${depDisponibles(e.pos).map(d => { const v = vencidoExt(d); return `<button class="row" data-a="dep-elegir" data-pos="${esc(d.pos)}" ${v ? 'disabled' : ''} aria-pressed="${cm.desde === d.pos}" style="${cm.desde === d.pos ? 'border-color:var(--ok);background:var(--ok-soft)' : ''}">
+            <span><b>ID ${esc(d.ident)}</b> · ${esc([d.clase, d.peso].filter(Boolean).join(' '))}<br><span class="m"><span class="mono">${esc(d.pos)}</span> · carga ${fmtD(d.vtoCarga)}</span></span>
+            <span>${v ? '<span class="pill p-b">Vencido</span>' : cm.desde === d.pos ? '<span class="pill p-ok">Elegido</span>' : ''}</span></button>`; }).join('')}</div>
+          ${cm.desde ? '<button class="btn" data-a="dep-otro">No es del depósito: escribir los datos</button>' : '<div class="m">Si el que ponés no está en la lista, completá los datos abajo.</div>'}` : ''}
         <label class="f" style="margin-top:8px">Motivo<select data-cambio="motivo"><option value="">Elegí el motivo…</option>${motivos.map(m => `<option ${m === cm.motivo ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select></label>` : ''}
-      <div class="grid2" style="margin-top:8px">${camposCambio.map(([k, l, t]) => `<label class="f">${l}<input data-cambio="${k}" type="${t || 'text'}" value="${esc(cm[k] || '')}"></label>`).join('')}</div>
+      <div class="grid2" style="margin-top:8px;${cm.desde ? 'display:none' : ''}">${camposCambio.map(([k, l, t]) => `<label class="f">${l}<input data-cambio="${k}" type="${t || 'text'}" value="${esc(cm[k] || '')}"></label>`).join('')}</div>
       <button class="btn" data-a="cambio-no" style="margin-top:8px">Cancelar el cambio</button></div>`
-    : `<div class="grid2"><button class="btn" data-a="cambio" data-r="1">${EXT ? 'Reemplazar extintor' : 'Cambiar manga'}</button><button class="btn" data-a="cambio" data-r="0">Corregir ${EXT ? 'ID' : 'código'}</button></div>
+    : esSust(e) ? `<button class="big" data-a="manga" data-v="vuelve">VOLVIÓ LA MANGA: CARGAR CÓDIGO NUEVO</button>
+      <button class="btn" data-a="vacio">No hay equipo en esta posición</button>`
+    : `${EXT ? '' : '<button class="btn" data-a="manga" data-v="retiro">Extinred se lleva la manga (queda sustituta)</button>'}
+      <div class="grid2"><button class="btn" data-a="cambio" data-r="1">${EXT ? 'Reemplazar extintor' : 'Cambiar manga'}</button><button class="btn" data-a="cambio" data-r="0">Corregir ${EXT ? 'ID' : 'código'}</button></div>
       <button class="btn" data-a="vacio">No hay equipo en esta posición</button>`}
   <h2>${c.reemplazo ? 'Estado del equipo nuevo' : 'Estado del ' + (EXT ? 'extintor' : 'nicho')} <span class="m" style="font-weight:400">(SÍ = está bien)</span></h2>
   <div>${rut.map(([k, t]) => `<div class="it"><span>${esc(t)}</span><span class="sn" role="group" aria-label="${esc(t)}">
@@ -594,7 +720,17 @@ document.addEventListener('click', async ev => {
   if (a === 'salir'){ salir(); return; }
   if (a === 'inicio'){ E.pantalla = 'inicio'; E.ot = null; E.msg = ''; dibujar(); return; }
   if (a === 'escanear'){ E.pantalla = 'escanear'; E.msg = ''; dibujar(); return; }
-  if (a === 'buscar'){ E.pantalla = 'buscar'; E.msg = ''; dibujar(); return; }
+  if (a === 'buscar'){ E.pantalla = 'buscar'; E.soloSust = false; E.msg = ''; dibujar(); return; }
+  if (a === 'ver-sust'){ E.pantalla = 'buscar'; E.tipo = 'HID'; E.q = ''; E.soloSust = true; E.msg = ''; dibujar(); return; }
+  if (a === 'solo-sust'){ E.soloSust = !E.soloSust; dibujar(); return; }
+  if (a === 'manga'){ E.control.manga = { accion: t.dataset.v, ident: '', vto: '' }; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
+  if (a === 'manga-no'){ E.control.manga = null; E.msg = ''; dibujar(); return; }
+  if (a === 'manga-ok'){ guardarManga(); return; }
+  if (a === 'dep-elegir'){ const d = (E.cat.equipos || []).find(x => x.tipo === 'EXT' && x.pos === t.dataset.pos); Object.assign(E.control.cambio, Object.fromEntries(DATOS_EXT.map(k => [k, d[k] || ''])), { desde: d.pos }); E.msg = ''; dibujar(); return; }
+  if (a === 'dep-otro'){ Object.assign(E.control.cambio, Object.fromEntries(DATOS_EXT.map(k => [k, ''])), { desde: '' }); dibujar(); return; }
+  if (a === 'dep-cargar'){ const e = E.control.eq; E.control.deposito = depRecargar(e) ? { ident: e.ident, clase: e.clase, peso: e.peso } : {}; E.msg = ''; dibujar(); return; }
+  if (a === 'dep-no'){ E.control.deposito = null; E.msg = ''; dibujar(); return; }
+  if (a === 'dep-ok'){ guardarDeposito(); return; }
   if (a === 'tipo'){ E.tipo = t.dataset.t; dibujar(); return; }
   if (a === 'elegir'){ abrirControl(t.dataset.pos, t.dataset.t); return; }
   if (a === 'cancelar'){ E.control = null; E.pantalla = 'inicio'; E.msg = ''; dibujar(); return; }
@@ -612,6 +748,8 @@ document.addEventListener('input', ev => {
   if (el.id === 'ot-obs'){ borrador(E.ot.id).obs = el.value; guardarBorrador(); return; }
   if (el.id === 'c-obs') E.control.obs = el.value;
   else if (el.dataset.cambio) E.control.cambio[el.dataset.cambio] = el.value;
+  else if (el.dataset.manga) E.control.manga[el.dataset.manga] = el.value;
+  else if (el.dataset.dep) E.control.deposito[el.dataset.dep] = el.value;
   else if (el.id === 'b-q'){ E.q = el.value; dibujar(); }
 });
 document.addEventListener('change', ev => {
