@@ -54,6 +54,18 @@ label.f input,label.f select,label.f textarea{border:1px solid #b4c2bd;border-ra
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .foto{max-width:100%;max-height:180px;border-radius:9px}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#14201c;color:#fff;padding:11px 16px;border-radius:10px;font-size:15px;z-index:9;max-width:92vw}
+button.card{font:inherit;color:inherit}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;flex:none}
+.chips button{flex:none;border:1px solid #b4c2bd;background:#fff;border-radius:18px;padding:6px 12px;min-height:40px;font-size:14px}
+.chips button[aria-pressed=true]{background:var(--pri);color:#fff;border-color:var(--pri)}
+.chips button.hecho:not([aria-pressed=true]){background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.sec{font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:8px;padding-bottom:4px;border-bottom:2px solid var(--line)}
+.it2{padding:9px 0;border-bottom:1px solid #eef2f0;font-size:15.5px}.it2 .fila{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.it2 textarea{width:100%;border:1px solid #b4c2bd;border-radius:9px;padding:8px;margin-top:6px;font-size:16px}
+.med{display:flex;gap:6px;margin-top:6px}.med label{flex:1;display:flex;flex-direction:column;font-size:12px;color:var(--muted)}
+.med input{border:1px solid #b4c2bd;border-radius:9px;padding:8px;min-height:44px;font-size:16px;width:100%}
+.sn button:disabled{opacity:.6}
+main>*{flex:none}
 :focus-visible{outline:3px solid #e2bf00;outline-offset:2px}
 </style>
 </head><body>
@@ -70,6 +82,7 @@ label.f input,label.f select,label.f textarea{border:1px solid #b4c2bd;border-ra
 // Dirección /exec del proyecto "API app preventivos" (NO la del mini ERP: esa pide cuenta de Google). Se completa al publicarlo.
 const SERVIDOR = 'https://script.google.com/macros/s/AKfycbzOiXPcVwqBXRH0CSJH7ikE489uxdT1rbTJg7Gs9spmGIXSq891K76aFthpctjoFge0Ew/exec';
 const MIN_INACTIVO = 30;           // la sesión del bombero se cierra sola (tablet compartida)
+const MIN_INACTIVO_TEC = 240;      // en el celular propio del técnico, más tiempo
 const LOTE = 5;                    // registros por envío (las fotos pesan)
 
 /* ---------- guardado en la tablet ---------- */
@@ -86,7 +99,7 @@ const DB = (() => {
 })();
 
 /* ---------- estado ---------- */
-const E = { pantalla: 'cargando', tablet: null, cat: null, sesion: null, cola: [], online: navigator.onLine, enviando: false, msg: '', tipo: 'EXT', q: '', pin: '', bomberoPin: '', control: null, ultimoUso: Date.now() };
+const E = { pantalla: 'cargando', tablet: null, cat: null, sesion: null, cola: [], online: navigator.onLine, enviando: false, msg: '', tipo: 'EXT', q: '', pin: '', bomberoPin: '', control: null, ultimoUso: Date.now(), usarTarjeta: false, ot: null, borr: {} };
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const hoyIso = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const ahoraIso = () => { const d = new Date(); return hoyIso() + 'T' + [d.getHours(), d.getMinutes(), d.getSeconds()].map(x => String(x).padStart(2, '0')).join(':'); };
@@ -111,7 +124,8 @@ async function enviar(cuerpo){
 }
 const conClave = c => Object.assign({ tablet: E.tablet.id, clave: E.tablet.clave }, c);
 async function guardarCatalogo(j){
-  E.cat = { ahora: j.ahora, equipos: j.equipos, rutinas: j.rutinas, tipos: j.tipos, motivos: j.motivos || {}, hechos: j.hechos || {}, abiertas: j.abiertas || {}, bomberos: j.bomberos, bajado: ahoraIso() };
+  E.cat = { ahora: j.ahora, equipos: j.equipos, rutinas: j.rutinas, tipos: j.tipos, motivos: j.motivos || {}, hechos: j.hechos || {}, abiertas: j.abiertas || {}, bomberos: j.bomberos, bajado: ahoraIso(),
+    modo: j.modo || '', termo: j.termo || null };
   await DB.set('catalogo', E.cat);
   // Si al bombero lo dieron de baja, se le cierra la sesión (lo que ya guardó se envía igual)
   if (E.sesion && !E.cat.bomberos.some(b => b.id === E.sesion.id)){ salir(); toast('Tu usuario fue dado de baja: avisá al supervisor'); }
@@ -119,7 +133,8 @@ async function guardarCatalogo(j){
 function sinAcceso(e){
   if (!/TABLET_SIN_ACCESO/.test(e.message)) return false;
   E.tablet = null; DB.del('tablet'); E.sesion = null; E.pantalla = 'vincular';
-  E.msg = 'Esta tablet quedó desvinculada. Pedile un código nuevo al supervisor. Lo que no se envió sigue guardado.';
+  E.msg = esTec() ? 'Este celular quedó desvinculado. Volvé a vincularlo con tu tarjeta o tu PIN. Lo que no se envió sigue guardado.'
+    : 'Esta tablet quedó desvinculada. Pedile un código nuevo al supervisor. Lo que no se envió sigue guardado.';
   return true;
 }
 async function bajar(){
@@ -187,7 +202,7 @@ function iniciarSesion(b){
   dibujar(); bajar().then(dibujar);
 }
 function salir(){ E.sesion = null; sessionStorage.removeItem('sesion'); pararCamara(); E.pantalla = 'login'; E.control = null; dibujar(); }
-setInterval(() => { if (E.sesion && Date.now() - E.ultimoUso > MIN_INACTIVO * 60000){ salir(); toast('Sesión cerrada por inactividad'); } }, 30000);
+setInterval(() => { if (E.sesion && Date.now() - E.ultimoUso > (esTec() ? MIN_INACTIVO_TEC : MIN_INACTIVO) * 60000){ salir(); toast('Sesión cerrada por inactividad'); } }, 30000);
 ['click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, () => { E.ultimoUso = Date.now(); }, { passive: true }));
 
 /* ---------- avance (servidor + lo que todavía está en la tablet) ---------- */
@@ -241,7 +256,7 @@ function fotoElegida(input){
 /* ---------- pantallas ---------- */
 function barra(titulo, sub, boton){
   return `<div class="bar"><div class="t"><b>${esc(titulo)}</b><small>${sub}</small></div>${boton || ''}</div>
-  <div class="net ${E.online ? 'ok' : ''}"><span>● ${E.online ? (E.enviando ? 'Con señal · enviando…' : 'Con señal') : 'Sin señal · trabajando en la tablet'}</span>
+  <div class="net ${E.online ? 'ok' : ''}"><span>● ${E.online ? (E.enviando ? 'Con señal · enviando…' : 'Con señal') : 'Sin señal · trabajando en ' + (esTec() ? 'el celular' : 'la tablet')}</span>
   <span>${E.cola.length ? `${E.cola.length} sin enviar${E.online && !E.enviando ? ' · <button data-a="sync">Enviar</button>' : ''}` : 'Todo enviado'}</span></div>`;
 }
 const aviso = () => E.msg ? `<div class="aviso err" role="alert">${esc(E.msg)}</div>` : '';
@@ -251,9 +266,12 @@ function vVincular(){
   <p>Pedile al supervisor un código en el mini ERP (Mantenimiento preventivo › App de preventivos › Tablets) y escribilo acá. Se hace una sola vez y necesita señal.</p>
   ${aviso()}
   <label class="f">Código de 6 letras<input id="v-cod" maxlength="6" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase;font-size:24px;letter-spacing:4px;text-align:center"></label>
-  <button class="big" data-a="vincular" ${E.online ? '' : 'disabled'}>${E.online ? 'VINCULAR' : 'Sin señal: buscá un lugar con internet'}</button></main>`;
+  <button class="big" data-a="vincular" ${E.online ? '' : 'disabled'}>${E.online ? 'VINCULAR' : 'Sin señal: buscá un lugar con internet'}</button>
+  <div class="o">— ¿Sos técnico y es tu celular? —</div>
+  <button class="big sec" data-a="vinc-tec">Soy técnico: vincular con mi tarjeta o PIN</button></main>`;
 }
 function vLogin(){
+  if (esTec()) return vLoginTec();
   const B = (E.cat.bomberos || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre));
   return barra('OT preventivas · ' + E.tablet.ed, 'Nadie ingresado') + `<main>
   ${aviso()}
@@ -267,6 +285,7 @@ function vLogin(){
   <p class="o">La sesión se cierra sola tras ${MIN_INACTIVO} min sin uso.</p></main>`;
 }
 function vInicio(){
+  if (esTec()) return vInicioTec();
   const tarjetas = Object.keys(E.cat.tipos || {}).map(tipo => {
     const tot = equiposDe(tipo).length, h = Object.keys(hechosDe(tipo)).length;
     if (!tot) return '';
@@ -359,18 +378,149 @@ function vControl(){
   ${aviso()}
   <button class="big" data-a="guardar">GUARDAR Y SEGUIR</button></main>`;
 }
+/* ---------- técnicos: su celular, sus OT termomecánicas ----------
+   El celular se vincula con la tarjeta o con iniciales + PIN del técnico. Recibe solo sus OT de la semana.
+   Lo que carga queda en el celular (borrador) hasta "Terminar OT"; ahí se encola y se envía cuando hay señal. */
+const esTec = () => !!(E.tablet && E.tablet.tipo === 'cel');
+const T_ = () => (E.cat && E.cat.termo) || { ots: [], rutinas: {}, abiertas: {} };
+const tocaTarea = (ru, ot) => it => ru.sem || ot.anual || it.frec < 360;
+const claveT = (pi, ei, id) => pi + '|' + ei + '|' + id;
+function tareaLista(v, it){
+  if (!v || !v.e) return false;
+  if (v.e === 'no') return !!String(v.obs || '').trim(); // con observación: alcanza con explicar (la medición puede no poder hacerse)
+  if (!it.med) return true;
+  return it.rst ? ['r', 's', 't'].every(c => String(v[c] || '').trim()) : !!String(v.val || '').trim();
+}
+const borrador = id => (E.borr[id] = E.borr[id] || { resp: {}, obs: '' });
+function equipoListo(ot, ru, pi, ei){
+  const b = borrador(ot.id), toca = tocaTarea(ru, ot);
+  return ru.def.partes[pi].secciones.every(s => s.items.filter(toca).every(it => tareaLista(b.resp[claveT(pi, ei, it.id)], it)));
+}
+function avanceOt(ot){
+  const ru = T_().rutinas[ot.rutina]; if (!ru) return [0, 0];
+  let h = 0, t = 0;
+  ru.def.partes.forEach((p, pi) => p.equipos.forEach((e, ei) => { t++; if (equipoListo(ot, ru, pi, ei)) h++; }));
+  return [h, t];
+}
+const enCola = id => E.cola.some(r => r.tipo === 'TERMO' && r.otsem === id);
+let borrT;
+function guardarBorrador(){ clearTimeout(borrT); borrT = setTimeout(() => DB.set('borradores', E.borr), 300); }
+
+function vVincularTec(){
+  return `<div class="bar"><div class="t"><b>OT preventivas</b><small>Vincular mi celular</small></div><button data-a="vinc-volver">Volver</button></div><main>
+  <h2>Soy técnico: vincular mi celular</h2>
+  <p>Escaneá tu tarjeta o escribí tus iniciales y tu PIN. Se hace una sola vez y necesita señal.</p>
+  ${aviso()}
+  <div class="cam"><video id="video" playsinline muted></video><div class="marco"></div><span id="cam-aviso">Escaneá tu tarjeta de técnico</span></div>
+  <div class="o">— o con tus iniciales y tu PIN —</div>
+  <div class="grid2"><label class="f">Iniciales<input id="vt-ini" maxlength="6" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase"></label>
+  <label class="f">PIN<input id="vt-pin" maxlength="4" inputmode="numeric" type="password" autocomplete="off"></label></div>
+  <button class="big" data-a="vincular-tec" ${E.online ? '' : 'disabled'}>${E.online ? 'VINCULAR' : 'Sin señal: buscá un lugar con internet'}</button></main>`;
+}
+async function vincularTec(cuerpo){
+  E.msg = ''; dibujar();
+  try {
+    const j = await enviar(Object.assign({ op: 'vincular_tec' }, cuerpo));
+    E.tablet = j.tablet; await DB.set('tablet', E.tablet);
+    await guardarCatalogo(await enviar(conClave({ op: 'bajar' })));
+    const b = E.cat.bomberos[0];
+    if (b) iniciarSesion(b); else { E.pantalla = 'login'; dibujar(); }
+    toast('Celular vinculado');
+  } catch(e){ E.msg = e.message; dibujar(); }
+}
+function vLoginTec(){
+  const b = (E.cat.bomberos || [])[0];
+  if (!b) return barra('OT preventivas', esc(E.tablet.nombre)) + `<main><div class="aviso err">Tu acceso está dado de baja o todavía no llegó. Avisá al supervisor. Lo que no se envió sigue guardado.</div></main>`;
+  return barra('OT preventivas', esc(E.tablet.nombre)) + `<main>${aviso()}
+  ${E.usarTarjeta ? `<div class="cam"><video id="video" playsinline muted></video><div class="marco"></div><span id="cam-aviso">Escaneá tu tarjeta</span></div>
+    <button class="btn" data-a="usar-pin">Entrar con mi PIN</button>`
+  : `<h2>${esc(b.nombre)}: tu PIN</h2>
+    <div class="pin">${[0, 1, 2, 3].map(i => `<i class="${i < E.pin.length ? 'f' : ''}">${i < E.pin.length ? '•' : ''}</i>`).join('')}</div>
+    <div class="tecl">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-a="tecla" data-n="${n}">${n}</button>`).join('')}<button data-a="usar-tarjeta">Tarjeta</button><button data-a="tecla" data-n="0">0</button><button data-a="borrar" aria-label="Borrar">⌫</button></div>`}
+  </main>`;
+}
+function vInicioTec(){
+  const L = T_().ots.slice().sort((a, b) => (a.estado === 'hecha') - (b.estado === 'hecha') || (a.semana < b.semana ? -1 : 1));
+  const card = o => {
+    const ru = T_().rutinas[o.rutina] || {}, [h, t] = avanceOt(o), enviando = enCola(o.id);
+    return `<button class="card" data-a="abrir-ot" data-id="${esc(o.id)}" style="text-align:left;width:100%;cursor:pointer" ${o.estado === 'hecha' && !enviando ? '' : ''}>
+      <div class="t">${esc(o.nombre)} ${ru.sem ? '<span class="pill p-i">Semestral</span>' : ''} ${o.estado === 'hecha' ? '<span class="pill p-ok">Hecha</span>' : enviando ? '<span class="pill p-w">Terminada · sin enviar</span>' : h ? '<span class="pill p-w">En curso</span>' : ''}</div>
+      <div class="m">${esc(o.semanaTxt)} · piso ${esc(o.piso || '–')} · ${t} equipo${t === 1 ? '' : 's'}</div>
+      ${o.estado === 'hecha' || enviando ? '' : `<div class="prog"><i style="width:${t ? Math.round(h / t * 100) : 0}%"></i></div>`}</button>`;
+  };
+  return barra('Hola, ' + E.sesion.nombre, 'Mis OT · ' + esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + `<main>${aviso()}
+  ${L.length ? L.map(card).join('') : '<div class="aviso p-i">No tenés OT asignadas por ahora. Se actualiza sola cuando hay señal.</div>'}
+  <p class="o">Datos del ${E.cat.bajado ? fmtD(E.cat.bajado) + ' ' + E.cat.bajado.slice(11, 16) : '–'} · abrí la app con señal al empezar la semana</p></main>`;
+}
+function vOt(){
+  const c = E.ot, o = T_().ots.find(x => x.id === c.id), ru = o && T_().rutinas[o.rutina];
+  if (!o || !ru){ E.pantalla = 'inicio'; return vInicioTec(); }
+  const b = borrador(o.id), toca = tocaTarea(ru, o), p = ru.def.partes[c.parte], e = p.equipos[c.eq], cerrada = o.estado === 'hecha' || enCola(o.id);
+  const [h, t] = avanceOt(o), ab = T_().abiertas;
+  const chips = (L, sel, a, listo) => L.length > 1 ? `<div class="chips">${L.map((x, i) => `<button data-a="${a}" data-i="${i}" aria-pressed="${i === sel}" class="${listo(i) ? 'hecho' : ''}">${esc(x)}</button>`).join('')}</div>` : '';
+  const partes = chips(ru.def.partes.map(x => x.nombre || 'Equipos'), c.parte, 'parte', i => ru.def.partes[i].equipos.every((x, ei) => equipoListo(o, ru, i, ei)));
+  const equipos = chips(p.equipos.map(x => x.nombre || x.cod), c.eq, 'equipo', i => equipoListo(o, ru, c.parte, i));
+  let html = '';
+  p.secciones.forEach(s => {
+    const items = s.items.filter(toca); if (!items.length) return;
+    html += `<div class="sec">${esc(s.titulo)}</div>`;
+    items.forEach(it => {
+      const k = claveT(c.parte, c.eq, it.id), v = b.resp[k] || {}, abierta = ab[o.rutina + '|' + (e.nombre || e.cod) + '|' + c.parte + '.' + it.id];
+      html += `<div class="it2"><div class="fila"><span>${esc(it.t)}${it.nota ? `<br><span class="m">${esc(it.nota)}</span>` : ''}${abierta ? `<br><span class="pill p-w">Ya informado: ${esc(abierta)}</span>` : ''}</span>
+        <span class="sn"><button class="si" data-a="tr" data-k="${k}" data-v="si" aria-pressed="${v.e === 'si'}" aria-label="Sin observación" ${cerrada ? 'disabled' : ''}>✔</button><button class="no" data-a="tr" data-k="${k}" data-v="no" aria-pressed="${v.e === 'no'}" aria-label="Con observación" ${cerrada ? 'disabled' : ''}>✖</button></span></div>
+        ${it.med ? `<div class="med">${(it.rst ? ['r', 's', 't'] : ['val']).map(f => `<label>${f === 'val' ? 'Valor' : f.toUpperCase()}<input inputmode="decimal" data-tk="${k}" data-f="${f}" value="${esc(v[f] || '')}" ${cerrada ? 'disabled' : ''}></label>`).join('')}</div>` : ''}
+        ${v.e === 'no' ? `<textarea data-tk="${k}" data-f="obs" rows="2" maxlength="300" placeholder="¿Qué observaste? (obligatorio)" ${cerrada ? 'disabled' : ''}>${esc(v.obs || '')}</textarea>` : ''}</div>`;
+    });
+  });
+  const anuales = ru.sem || o.anual ? [] : p.secciones.flatMap(s => s.items).filter(it => it.frec >= 360);
+  const nE = p.secciones.reduce((n, s) => n + s.items.filter(toca).length, 0), hE = p.secciones.reduce((n, s) => n + s.items.filter(toca).filter(it => tareaLista(b.resp[claveT(c.parte, c.eq, it.id)], it)).length, 0);
+  return barra(o.nombre, esc(o.semanaTxt) + ' · piso ' + esc(o.piso || '–'), '<button data-a="inicio">Volver</button>') + `<main>
+  ${cerrada ? `<div class="aviso p-i">${o.estado === 'hecha' ? 'Esta OT ya está terminada y enviada.' : 'Terminada: se envía sola cuando haya señal.'} Si hay que corregir algo, avisá al supervisor.</div>` : ''}
+  ${partes}${equipos}
+  <div class="card"><div class="t">${esc(e.nombre || e.cod)}</div><div class="m" id="ot-prog-m">${esc(e.cod || '')} ${e.cod ? '·' : ''} ${hE} de ${nE} tareas</div><div class="prog"><i id="ot-prog-i" style="width:${nE ? Math.round(hE / nE * 100) : 0}%"></i></div></div>
+  ${cerrada ? '' : '<button class="btn" data-a="todo-ok">Marcar todo ✔ (después corrijo lo que tenga observación)</button>'}
+  <div>${html}</div>
+  ${anuales.length ? `<details><summary class="m">${anuales.length} tareas anuales: no se hacen esta semana</summary>${anuales.map(it => `<div class="it2 m">${esc(it.t)}</div>`).join('')}</details>` : ''}
+  <label class="f">Observación general de la OT (opcional)<textarea id="ot-obs" rows="2" maxlength="500" ${cerrada ? 'disabled' : ''}>${esc(b.obs)}</textarea></label>
+  ${aviso()}
+  ${cerrada ? '' : `<button class="big" id="ot-terminar" data-a="terminar" ${h === t ? '' : 'disabled'}>${h === t ? 'TERMINAR OT' : `Terminar OT (faltan ${t - h} de ${t} equipos)`}</button>`}</main>`;
+}
+// Al escribir una medición: se actualiza el avance sin redibujar (para no perder el campo)
+function actualizarProgresoOt(){
+  const c = E.ot, o = T_().ots.find(x => x.id === c.id), ru = o && T_().rutinas[o.rutina]; if (!ru) return;
+  const b = borrador(o.id), toca = tocaTarea(ru, o), p = ru.def.partes[c.parte], e = p.equipos[c.eq];
+  const its = p.secciones.flatMap(s => s.items.filter(toca)), hE = its.filter(it => tareaLista(b.resp[claveT(c.parte, c.eq, it.id)], it)).length, [h, t] = avanceOt(o);
+  const m = document.getElementById('ot-prog-m'), i = document.getElementById('ot-prog-i'), bt = document.getElementById('ot-terminar');
+  if (m) m.textContent = (e.cod ? e.cod + ' · ' : '') + hE + ' de ' + its.length + ' tareas';
+  if (i) i.style.width = (its.length ? Math.round(hE / its.length * 100) : 0) + '%';
+  if (bt){ bt.disabled = h !== t; bt.textContent = h === t ? 'TERMINAR OT' : 'Terminar OT (faltan ' + (t - h) + ' de ' + t + ' equipos)'; }
+}
+async function terminarOt(){
+  const o = T_().ots.find(x => x.id === E.ot.id), b = borrador(o.id), ru = T_().rutinas[o.rutina], toca = tocaTarea(ru, o), resp = {};
+  // Solo lo que corresponde a esta OT (por si la rutina cambió mientras tanto)
+  ru.def.partes.forEach((p, pi) => p.equipos.forEach((e, ei) => p.secciones.forEach(s => s.items.filter(toca).forEach(it => { const k = claveT(pi, ei, it.id); if (b.resp[k]) resp[k] = b.resp[k]; }))));
+  const nNo = Object.values(resp).filter(v => v.e === 'no').length;
+  if (!confirm('¿Terminar la OT ' + o.nombre + '?' + (nNo ? ' Hay ' + nNo + ' tareas con observación: van al supervisor.' : ''))) return;
+  await DB.encolar({ uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: 'TERMO', otsem: o.id, resp, obs: String(b.obs || '').trim(), tec: E.sesion.id });
+  delete E.borr[o.id]; await DB.set('borradores', E.borr);
+  E.cola = await DB.cola();
+  toast(nNo ? 'OT terminada · ' + nNo + ' observaciones van al supervisor' : 'OT terminada');
+  E.ot = null; E.pantalla = 'inicio'; E.msg = '';
+  dibujar(); sincronizar();
+}
+
 function dibujar(){
   const app = document.getElementById('app'), antes = E.pantallaDibujada;
-  const v = { vincular: vVincular, login: vLogin, inicio: vInicio, escanear: vEscanear, buscar: vBuscar, control: vControl }[E.pantalla];
+  const v = { vincular: vVincular, 'vincular-tec': vVincularTec, login: vLogin, inicio: vInicio, escanear: vEscanear, buscar: vBuscar, control: vControl, ot: vOt }[E.pantalla];
   if (!v){ app.innerHTML = '<main><p class="o">Cargando…</p></main>'; return; }
   // No redibujar mientras se escribe en un campo de texto (se perdería el foco)
   const foco = document.activeElement && document.activeElement.id;
   app.innerHTML = v();
   if (foco && document.getElementById(foco)){ const el = document.getElementById(foco); el.focus(); if (el.setSelectionRange && el.value != null) try { el.setSelectionRange(el.value.length, el.value.length); } catch(x){} }
   E.pantallaDibujada = E.pantalla;
-  const camara = (E.pantalla === 'escanear') || (E.pantalla === 'login' && !E.bomberoPin);
+  const camara = E.pantalla === 'escanear' || E.pantalla === 'vincular-tec' || (E.pantalla === 'login' && (esTec() ? E.usarTarjeta : !E.bomberoPin));
   if (!camara) pararCamara();
-  else if (!CAM.stream || antes !== E.pantalla) iniciarCamara(E.pantalla === 'login' ? entrarConQR : txt => abrirControl(txt));
+  else if (!CAM.stream || antes !== E.pantalla) iniciarCamara(E.pantalla === 'login' ? entrarConQR : E.pantalla === 'vincular-tec' ? txt => vincularTec({ qr: txt }) : txt => abrirControl(txt));
   else { const vid = document.getElementById('video'); if (vid && CAM.stream){ vid.srcObject = CAM.stream; vid.play().catch(() => {}); } }
 }
 
@@ -390,12 +540,31 @@ document.addEventListener('click', async ev => {
     } catch(e){ E.msg = e.message; }
     dibujar(); sincronizar(); return;
   }
-  if (a === 'tecla'){ if (E.pin.length < 4) E.pin += t.dataset.n; E.msg = ''; dibujar(); if (E.pin.length === 4) entrarConPin(); return; }
+  if (a === 'vinc-tec'){ E.pantalla = 'vincular-tec'; E.msg = ''; dibujar(); return; }
+  if (a === 'vinc-volver'){ E.pantalla = 'vincular'; E.msg = ''; dibujar(); return; }
+  if (a === 'vincular-tec'){
+    const ini = document.getElementById('vt-ini').value.trim().toUpperCase(), pin = document.getElementById('vt-pin').value.trim();
+    if (!ini || pin.length !== 4){ E.msg = 'Escribí tus iniciales y tu PIN de 4 números.'; dibujar(); return; }
+    t.disabled = true; vincularTec({ ini, pin }); return;
+  }
+  if (a === 'usar-tarjeta'){ E.usarTarjeta = true; E.msg = ''; dibujar(); return; }
+  if (a === 'usar-pin'){ E.usarTarjeta = false; E.msg = ''; dibujar(); return; }
+  if (a === 'abrir-ot'){ E.ot = { id: t.dataset.id, parte: 0, eq: 0 }; E.pantalla = 'ot'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
+  if (a === 'parte'){ E.ot.parte = +t.dataset.i; E.ot.eq = 0; dibujar(); window.scrollTo(0, 0); return; }
+  if (a === 'equipo'){ E.ot.eq = +t.dataset.i; dibujar(); window.scrollTo(0, 0); return; }
+  if (a === 'tr'){ const r = borrador(E.ot.id).resp; r[t.dataset.k] = Object.assign(r[t.dataset.k] || {}, { e: t.dataset.v }); E.msg = ''; guardarBorrador(); dibujar(); return; }
+  if (a === 'todo-ok'){
+    const o = T_().ots.find(x => x.id === E.ot.id), ru = T_().rutinas[o.rutina], r = borrador(o.id).resp;
+    ru.def.partes[E.ot.parte].secciones.forEach(s => s.items.filter(tocaTarea(ru, o)).forEach(it => { const k = claveT(E.ot.parte, E.ot.eq, it.id); r[k] = Object.assign(r[k] || {}, { e: (r[k] || {}).e || 'si' }); }));
+    guardarBorrador(); dibujar(); return;
+  }
+  if (a === 'terminar'){ terminarOt(); return; }
+  if (a === 'tecla'){ if (esTec() && E.cat.bomberos[0]) E.bomberoPin = E.cat.bomberos[0].id; if (E.pin.length < 4) E.pin += t.dataset.n; E.msg = ''; dibujar(); if (E.pin.length === 4) entrarConPin(); return; }
   if (a === 'borrar'){ E.pin = E.pin.slice(0, -1); dibujar(); return; }
   if (a === 'pin-volver'){ E.bomberoPin = ''; E.pin = ''; E.msg = ''; dibujar(); return; }
   if (a === 'sync'){ sincronizar(true); return; }
   if (a === 'salir'){ salir(); return; }
-  if (a === 'inicio'){ E.pantalla = 'inicio'; E.msg = ''; dibujar(); return; }
+  if (a === 'inicio'){ E.pantalla = 'inicio'; E.ot = null; E.msg = ''; dibujar(); return; }
   if (a === 'escanear'){ E.pantalla = 'escanear'; E.msg = ''; dibujar(); return; }
   if (a === 'buscar'){ E.pantalla = 'buscar'; E.msg = ''; dibujar(); return; }
   if (a === 'tipo'){ E.tipo = t.dataset.t; dibujar(); return; }
@@ -411,6 +580,8 @@ document.addEventListener('click', async ev => {
 });
 document.addEventListener('input', ev => {
   const el = ev.target;
+  if (el.dataset.tk){ const r = borrador(E.ot.id).resp; r[el.dataset.tk] = Object.assign(r[el.dataset.tk] || {}, { [el.dataset.f]: el.value }); guardarBorrador(); actualizarProgresoOt(); return; }
+  if (el.id === 'ot-obs'){ borrador(E.ot.id).obs = el.value; guardarBorrador(); return; }
   if (el.id === 'c-obs') E.control.obs = el.value;
   else if (el.dataset.cambio) E.control.cambio[el.dataset.cambio] = el.value;
   else if (el.id === 'b-q'){ E.q = el.value; dibujar(); }
@@ -442,6 +613,7 @@ setInterval(actualizarSola, 120000);
   E.tablet = await DB.get('tablet') || null;
   E.cat = await DB.get('catalogo') || null;
   E.cola = await DB.cola();
+  E.borr = await DB.get('borradores') || {};
   try { E.sesion = JSON.parse(sessionStorage.getItem('sesion')); } catch(e){}
   if (!E.tablet || !E.cat){ E.pantalla = 'vincular'; dibujar(); return; }
   if (E.sesion && !(E.cat.bomberos || []).some(b => b.id === E.sesion.id)) E.sesion = null;
