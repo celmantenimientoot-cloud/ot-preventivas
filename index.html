@@ -142,7 +142,8 @@ function sinAcceso(e){
 }
 async function bajar(){
   if (!E.tablet || !navigator.onLine) return;
-  try { await guardarCatalogo(await enviar(conClave({ op: 'bajar' }))); } catch(e){ if (sinAcceso(e)) dibujar(); }
+  try { await guardarCatalogo(await enviar(conClave({ op: 'bajar' }))); E.errBajar = ''; }
+  catch(e){ if (sinAcceso(e)) dibujar(); else E.errBajar = e.message || String(e); }
 }
 async function sincronizar(manual){
   if (E.enviando || !E.tablet) return;
@@ -355,7 +356,10 @@ function barra(titulo, sub, boton){
   <div class="net ${E.online ? 'ok' : ''}"><span>● ${E.online ? (E.enviando ? 'Con señal · enviando…' : 'Con señal') : 'Sin señal · trabajando en ' + (esTec() ? 'el celular' : 'la tablet')}</span>
   <span>${E.cola.length ? `${E.cola.length} sin enviar${E.online && !E.enviando ? ' · <button data-a="sync">Enviar</button>' : ''}` : 'Todo enviado'}</span></div>`;
 }
-const aviso = () => E.msg ? `<div class="aviso err" role="alert">${esc(E.msg)}</div>` : '';
+const aviso = () => (E.msg ? `<div class="aviso err" role="alert">${esc(E.msg)}</div>` : '')
+  + (E.errBajar && E.tablet ? `<div class="aviso err" role="alert">No se pudo actualizar la lista desde el sistema: ${esc(E.errBajar)}. Avisá al supervisor.</div>` : '');
+// Pie de la pantalla de entrada: de cuándo es la lista y un botón para pedirla ya
+const pieLista = () => `<p class="o">Lista del ${E.cat && E.cat.bajado ? fmtD(E.cat.bajado) + ' ' + E.cat.bajado.slice(11, 16) : '–'} · <button class="btn" data-a="actualizar" style="display:inline-block;width:auto;min-height:36px;padding:0 12px" ${E.online ? '' : 'disabled'}>Actualizar lista</button></p>`;
 function vVincular(){
   return `<div class="bar"><div class="t"><b>OT preventivas</b><small>Tablet sin vincular</small></div></div><main>
   <h2>Vincular esta tablet</h2>
@@ -378,6 +382,7 @@ function vLogin(){
     <div class="o">— o, si no tenés la tarjeta —</div>
     <label class="f">Bombero<select id="l-bomb"><option value="">Elegí tu nombre…</option>${B.map(b => `<option value="${esc(b.id)}">${esc(b.nombre)}</option>`).join('')}</select></label>
     ${B.length ? '' : '<div class="aviso err">No hay bomberos cargados para esta tablet. El supervisor los da de alta en el mini ERP: aparecen solos cuando la tablet tiene señal.</div>'}`}
+  ${pieLista()}
   <p class="o">La sesión se cierra sola tras ${MIN_INACTIVO} min sin uso.</p></main>`;
 }
 function vInicio(){
@@ -721,6 +726,7 @@ document.addEventListener('click', async ev => {
   if (a === 'borrar'){ E.pin = E.pin.slice(0, -1); dibujar(); return; }
   if (a === 'pin-volver'){ E.bomberoPin = ''; E.pin = ''; E.msg = ''; dibujar(); return; }
   if (a === 'sync'){ sincronizar(true); return; }
+  if (a === 'actualizar'){ t.disabled = true; toast('Actualizando la lista…'); await actualizarSola(); dibujar(); toast(E.errBajar ? 'No se pudo actualizar' : 'Lista actualizada'); return; }
   if (a === 'salir'){ salir(); return; }
   if (a === 'inicio'){ E.pantalla = 'inicio'; E.ot = null; E.msg = ''; dibujar(); return; }
   if (a === 'escanear'){ E.pantalla = 'escanear'; E.msg = ''; dibujar(); return; }
