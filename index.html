@@ -166,25 +166,51 @@ async function sincronizar(manual){
 }
 
 /* ---------- cámara y QR (lector del navegador: Chrome en Android) ---------- */
-const CAM = { stream: null, timer: null };
-function pararCamara(){ clearInterval(CAM.timer); CAM.timer = null; if (CAM.stream){ CAM.stream.getTracks().forEach(t => t.stop()); CAM.stream = null; } }
+// Una sola cámara a la vez: cada arranque tiene su número (gen). Si la pantalla se redibuja mientras la cámara
+// todavía está abriendo, el arranque viejo se cancela y cierra su cámara (antes quedaba una "suelta" que seguía
+// leyendo el QR y vibrando, y competía con la nueva: a veces no leía hasta actualizar la pantalla).
+const CAM = { stream: null, timer: null, gen: 0, abriendo: false };
+function pararCamara(){
+  CAM.gen++; CAM.abriendo = false;
+  clearInterval(CAM.timer); CAM.timer = null;
+  if (CAM.stream){ CAM.stream.getTracks().forEach(t => t.stop()); CAM.stream = null; }
+}
 async function iniciarCamara(alLeer){
   pararCamara();
-  const v = document.getElementById('video'), aviso = document.getElementById('cam-aviso');
-  if (!v) return;
+  const gen = CAM.gen, v0 = document.getElementById('video'), aviso = document.getElementById('cam-aviso');
+  if (!v0) return;
   if (!('BarcodeDetector' in window)){ aviso.textContent = 'Esta tablet no lee QR desde el navegador. Usá "Buscar sin QR".'; return; }
+  CAM.abriendo = true;
+  let stream = null;
   try {
     const det = new BarcodeDetector({ formats: ['qr_code'] });
-    CAM.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-    v.srcObject = CAM.stream; await v.play();
+    // Más resolución y enfoque continuo (si la cámara lo permite): el QR se toma más fácil y de más lejos
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false,
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 }, advanced: [{ focusMode: 'continuous' }] } });
+    if (gen !== CAM.gen){ stream.getTracks().forEach(t => t.stop()); return; } // mientras abría, la pantalla cambió
+    CAM.stream = stream; CAM.abriendo = false;
+    const vid = () => document.getElementById('video'); // la pantalla se redibuja: siempre el video que está a la vista
+    const v = vid(); v.srcObject = stream; await v.play().catch(() => {});
     let ocupado = false;
     CAM.timer = setInterval(async () => {
-      if (ocupado || v.readyState < 2) return; ocupado = true;
-      try { const c = await det.detect(v); if (c.length){ const txt = c[0].rawValue.trim(); pararCamara(); if (navigator.vibrate) navigator.vibrate(80); alLeer(txt); } } catch(e){}
+      if (gen !== CAM.gen){ clearInterval(CAM.timer); return; }
+      const el = vid();
+      if (ocupado || !el || el.readyState < 2) return;
+      if (el.srcObject !== stream){ el.srcObject = stream; el.play().catch(() => {}); return; }
+      ocupado = true;
+      try {
+        const c = await det.detect(el);
+        if (c.length && gen === CAM.gen){ const txt = c[0].rawValue.trim(); pararCamara(); if (navigator.vibrate) navigator.vibrate(80); alLeer(txt); return; } // una sola lectura
+      } catch(e){}
       ocupado = false;
-    }, 250);
-  } catch(e){ aviso.textContent = 'No se pudo abrir la cámara: ' + e.message; }
+    }, 200);
+  } catch(e){
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    if (gen === CAM.gen){ CAM.abriendo = false; aviso.textContent = 'No se pudo abrir la cámara: ' + e.message; }
+  }
 }
+// Con la app minimizada se apaga la cámara; al volver, se abre de nuevo
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') pararCamara(); else if (E.pantalla) dibujar(); });
 
 /* ---------- sesión del bombero ---------- */
 async function entrarConQR(txt){
@@ -673,7 +699,7 @@ function dibujar(){
   E.pantallaDibujada = E.pantalla;
   const camara = E.pantalla === 'escanear' || E.pantalla === 'vincular-tec' || (E.pantalla === 'login' && (esTec() ? E.usarTarjeta : !E.bomberoPin));
   if (!camara) pararCamara();
-  else if (!CAM.stream || antes !== E.pantalla) iniciarCamara(E.pantalla === 'login' ? entrarConQR : E.pantalla === 'vincular-tec' ? txt => vincularTec({ qr: txt }) : txt => abrirControl(txt));
+  else if ((!CAM.stream && !CAM.abriendo) || antes !== E.pantalla) iniciarCamara(E.pantalla === 'login' ? entrarConQR : E.pantalla === 'vincular-tec' ? txt => vincularTec({ qr: txt }) : txt => abrirControl(txt));
   else { const vid = document.getElementById('video'); if (vid && CAM.stream){ vid.srcObject = CAM.stream; vid.play().catch(() => {}); } }
 }
 
