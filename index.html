@@ -529,6 +529,7 @@ function vControl(){
   <div>${rut.map(([k, t]) => `<div class="it"><span>${esc(t)}</span><span class="sn" role="group" aria-label="${esc(t)}">
     <button class="si" data-a="resp" data-k="${k}" data-v="SI" aria-pressed="${c.resp[k] === 'SI'}">SÍ</button><button class="no" data-a="resp" data-k="${k}" data-v="NO" aria-pressed="${c.resp[k] === 'NO'}">NO</button></span></div>`).join('')}</div>
   <button class="btn" data-a="todo-si">Todo SÍ</button>
+  <p class="m" style="margin:4px 0 0">Para desmarcar una respuesta, tocá de nuevo el mismo SÍ o NO.</p>
   <label class="f">Observación${rut.some(([k]) => c.resp[k] === 'NO') ? ' (obligatoria si hay un NO)' : ''}<textarea id="c-obs" rows="2" maxlength="300">${esc(c.obs)}</textarea></label>
   ${foto}
   ${rut.some(([k]) => c.resp[k] === 'NO') ? `<div class="aviso err">Se propone un correctivo al supervisor.${abiertas.length ? ' Ya hay uno abierto por: ' + esc(abiertas.join(', ')) + ' (no se repite).' : ''}</div>` : ''}
@@ -770,7 +771,9 @@ document.addEventListener('click', async ev => {
   if (a === 'tipo'){ E.tipo = t.dataset.t; dibujar(); return; }
   if (a === 'elegir'){ abrirControl(t.dataset.pos, t.dataset.t); return; }
   if (a === 'cancelar'){ E.control = null; E.pantalla = 'inicio'; E.msg = ''; dibujar(); return; }
-  if (a === 'resp'){ E.control.resp[t.dataset.k] = t.dataset.v; E.msg = ''; dibujar(); return; }
+  if (a === 'resp'){ // tocar de nuevo la misma respuesta la desmarca
+    const k = t.dataset.k; if (E.control.resp[k] === t.dataset.v) delete E.control.resp[k]; else E.control.resp[k] = t.dataset.v;
+    E.msg = ''; dibujar(); return; }
   if (a === 'todo-si'){ E.cat.rutinas[E.control.eq.tipo].forEach(([k]) => { E.control.resp[k] = 'SI'; }); dibujar(); return; }
   if (a === 'cambio'){ E.control.reemplazo = t.dataset.r === '1'; E.control.cambio = { reemplazo: E.control.reemplazo, ident: '', motivo: t.dataset.motivo || '' }; dibujar(); return; }
   if (a === 'vacio'){ E.control.vacio = true; E.msg = ''; dibujar(); return; }
