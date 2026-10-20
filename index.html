@@ -43,9 +43,10 @@ label.f input,label.f select,label.f textarea{border:1px solid #b4c2bd;border-ra
 .fi{width:100%;border-collapse:collapse}.fi th{text-align:left;font-weight:500;color:var(--muted);padding:5px 10px 5px 0;width:46%;vertical-align:top}.fi td{padding:5px 0}.fi tr+tr th,.fi tr+tr td{border-top:1px solid #e3e9e6}
 .mono{font-family:monospace;font-weight:700}
 .it{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #eef2f0;font-size:15.5px}
-.sn{display:flex;gap:6px;flex:none}.sn button{min-width:58px;min-height:46px;font-weight:700;border-radius:9px;border:1px solid #b4c2bd;background:#fff}
+.sn{display:flex;gap:6px;flex:none}.sn button{min-width:50px;min-height:46px;font-weight:700;border-radius:9px;border:1px solid #b4c2bd;background:#fff}
 .sn button.si[aria-pressed=true]{background:var(--pri);color:#fff;border-color:var(--pri)}
 .sn button.no[aria-pressed=true]{background:var(--bad);color:#fff;border-color:var(--bad)}
+.sn button.nc{font-size:13px}.sn button.nc[aria-pressed=true]{background:#56665f;color:#fff;border-color:#56665f}
 .aviso{border-radius:9px;padding:9px 11px;font-size:14px}
 .err{background:var(--bad-soft);color:var(--bad-ink)}
 .lista .row{display:flex;justify-content:space-between;gap:8px;padding:11px 4px;border-bottom:1px solid #eef2f0;cursor:pointer;background:none;border-left:0;border-right:0;border-top:0;width:100%;text-align:left;font-size:15px}
@@ -511,8 +512,11 @@ const esTec = () => !!(E.tablet && E.tablet.tipo === 'cel');
 const T_ = () => (E.cat && E.cat.termo) || { ots: [], rutinas: {}, abiertas: {} };
 const tocaTarea = (ru, ot) => it => ru.sem || ot.anual || it.frec < 360;
 const claveT = (pi, ei, id) => pi + '|' + ei + '|' + id;
+// Las tareas de la rutina que no corresponden a este equipo (las sacó el supervisor) no se muestran
+const tocaEq = (ru, ot, pi, ei) => { const t = tocaTarea(ru, ot), ex = ((ru.def.partes[pi].equipos[ei] || {}).excluir) || []; return it => t(it) && ex.indexOf(it.id) < 0; };
 function tareaLista(v, it){
   if (!v || !v.e) return false;
+  if (v.e === 'nc') return true; // no corresponde a este equipo: no lleva medición
   if (v.e === 'no') return !!String(v.obs || '').trim(); // con observación: alcanza con explicar (la medición puede no poder hacerse)
   if (!it.med) return true;
   return it.rst ? ['r', 's', 't'].every(c => String(v[c] || '').trim()) : !!String(v.val || '').trim();
@@ -587,7 +591,7 @@ function vInicioTec(){
 function vOt(){
   const c = E.ot, o = T_().ots.find(x => x.id === c.id), ru = o && T_().rutinas[o.rutina];
   if (!o || !ru){ E.pantalla = 'inicio'; return vInicioTec(); }
-  const b = borrador(o.id), toca = tocaTarea(ru, o), p = ru.def.partes[c.parte], e = p.equipos[c.eq];
+  const b = borrador(o.id), toca = tocaEq(ru, o, c.parte, c.eq), p = ru.def.partes[c.parte], e = p.equipos[c.eq];
   const por = o.estado === 'hecha' ? (guardadoPor(o, c.parte, c.eq) || 'la OT ya está hecha') : guardadoPor(o, c.parte, c.eq), cerrado = !!por;
   const [h, t] = avanceOt(o), ab = T_().abiertas;
   const chips = (L, sel, a, listo) => L.length > 1 ? `<div class="chips">${L.map((x, i) => `<button data-a="${a}" data-i="${i}" aria-pressed="${i === sel}" class="${listo(i) ? 'hecho' : ''}">${esc(x)}</button>`).join('')}</div>` : '';
@@ -600,12 +604,12 @@ function vOt(){
     items.forEach(it => {
       const k = claveT(c.parte, c.eq, it.id), v = b.resp[k] || {}, abierta = ab[o.rutina + '|' + (e.nombre || e.cod) + '|' + c.parte + '.' + it.id];
       html += `<div class="it2"><div class="fila"><span>${esc(it.t)}${it.nota ? `<br><span class="m">${esc(it.nota)}</span>` : ''}${abierta ? `<br><span class="pill p-w">Ya informado: ${esc(abierta)}</span>` : ''}</span>
-        <span class="sn"><button class="si" data-a="tr" data-k="${k}" data-v="si" aria-pressed="${v.e === 'si'}" aria-label="Sin observación">✔</button><button class="no" data-a="tr" data-k="${k}" data-v="no" aria-pressed="${v.e === 'no'}" aria-label="Con observación">✖</button></span></div>
-        ${it.med ? `<div class="med">${(it.rst ? ['r', 's', 't'] : ['val']).map(f => `<label>${f === 'val' ? 'Valor' : f.toUpperCase()}<input inputmode="decimal" data-tk="${k}" data-f="${f}" value="${esc(v[f] || '')}"></label>`).join('')}</div>` : ''}
-        ${v.e === 'no' ? `<textarea data-tk="${k}" data-f="obs" rows="2" maxlength="300" placeholder="¿Qué observaste? (obligatorio)">${esc(v.obs || '')}</textarea>` : ''}</div>`;
+        <span class="sn"><button class="si" data-a="tr" data-k="${k}" data-v="si" aria-pressed="${v.e === 'si'}" aria-label="Sin observación">✔</button><button class="no" data-a="tr" data-k="${k}" data-v="no" aria-pressed="${v.e === 'no'}" aria-label="Con observación">✖</button><button class="nc" data-a="tr" data-k="${k}" data-v="nc" aria-pressed="${v.e === 'nc'}" aria-label="No corresponde a este equipo">N/C</button></span></div>
+        ${it.med && v.e !== 'nc' ? `<div class="med">${(it.rst ? ['r', 's', 't'] : ['val']).map(f => `<label>${f === 'val' ? 'Valor' : f.toUpperCase()}<input inputmode="decimal" data-tk="${k}" data-f="${f}" value="${esc(v[f] || '')}"></label>`).join('')}</div>` : ''}
+        ${v.e === 'no' || v.e === 'nc' ? `<textarea data-tk="${k}" data-f="obs" rows="2" maxlength="300" placeholder="${v.e === 'nc' ? '¿Por qué no corresponde? (opcional, ej.: tiene un solo motor)' : '¿Qué observaste? (obligatorio)'}">${esc(v.obs || '')}</textarea>` : ''}</div>`;
     });
   });
-  const anuales = ru.sem || o.anual ? [] : p.secciones.flatMap(s => s.items).filter(it => it.frec >= 360);
+  const exc = ((e || {}).excluir) || [], anuales = ru.sem || o.anual ? [] : p.secciones.flatMap(s => s.items).filter(it => it.frec >= 360 && exc.indexOf(it.id) < 0);
   const nE = p.secciones.reduce((n, s) => n + s.items.filter(toca).length, 0), hE = p.secciones.reduce((n, s) => n + s.items.filter(toca).filter(it => tareaLista(b.resp[claveT(c.parte, c.eq, it.id)], it)).length, 0);
   const listo = hE === nE;
   return barra((o.piso ? 'PISO ' + o.piso + ' · ' : '') + o.nombre, esc(o.semanaTxt), '<button data-a="inicio">Volver</button>') + `<main>
@@ -616,7 +620,7 @@ function vOt(){
     ${cerrado ? `<div class="m">${esc(e.cod || '')} · <span class="pill p-ok">Guardado por ${esc(por)}</span></div>`
     : `<div class="m" id="ot-prog-m">${esc(e.cod || '')} ${e.cod ? '·' : ''} ${hE} de ${nE} tareas</div><div class="prog"><i id="ot-prog-i" style="width:${nE ? Math.round(hE / nE * 100) : 0}%"></i></div>`}</div>
   ${cerrado ? '<p class="o">Este equipo ya está guardado. Si hay que corregir algo, avisá al supervisor.</p>' : `<div class="grid2"><button class="btn" data-a="todo-ok">Marcar todo ✔</button><button class="btn" data-a="todo-borrar" ${hE ? '' : 'disabled'}>Desmarcar todo este equipo</button></div>
-    <p class="m" style="margin:0">Para desmarcar una sola tarea, tocá de nuevo el ✔ o la ✖.</p>`}
+    <p class="m" style="margin:0">Para desmarcar una sola tarea, tocá de nuevo el ✔, la ✖ o N/C. <b>N/C</b> = esa tarea no existe en este equipo (por ejemplo, no tiene segundo motor): no va como problema, el supervisor la saca de la rutina.</p>`}
   <div>${html}</div>
   ${anuales.length && !cerrado ? `<details><summary class="m">${anuales.length} tareas anuales: no se hacen esta semana</summary>${anuales.map(it => `<div class="it2 m">${esc(it.t)}</div>`).join('')}</details>` : ''}
   ${o.estado === 'hecha' ? '' : `<label class="f">Observación general de la OT (opcional, va con cada equipo que guardes)<textarea id="ot-obs" rows="2" maxlength="500">${esc(b.obs)}</textarea></label>`}
@@ -627,7 +631,7 @@ function vOt(){
 // Al escribir una medición: se actualiza el avance sin redibujar (para no perder el campo)
 function actualizarProgresoOt(){
   const c = E.ot, o = T_().ots.find(x => x.id === c.id), ru = o && T_().rutinas[o.rutina]; if (!ru) return;
-  const b = borrador(o.id), toca = tocaTarea(ru, o), p = ru.def.partes[c.parte], e = p.equipos[c.eq];
+  const b = borrador(o.id), toca = tocaEq(ru, o, c.parte, c.eq), p = ru.def.partes[c.parte], e = p.equipos[c.eq];
   const its = p.secciones.flatMap(s => s.items.filter(toca)), hE = its.filter(it => tareaLista(b.resp[claveT(c.parte, c.eq, it.id)], it)).length;
   const m = document.getElementById('ot-prog-m'), i = document.getElementById('ot-prog-i'), bt = document.getElementById('ot-guardar');
   if (m) m.textContent = (e.cod ? e.cod + ' · ' : '') + hE + ' de ' + its.length + ' tareas';
@@ -636,7 +640,7 @@ function actualizarProgresoOt(){
 }
 // Guarda el equipo que está en pantalla: va a la cola (se envía con señal) y pasa al siguiente que falte
 async function guardarEquipo(){
-  const c = E.ot, o = T_().ots.find(x => x.id === c.id), b = borrador(o.id), ru = T_().rutinas[o.rutina], toca = tocaTarea(ru, o), p = ru.def.partes[c.parte], resp = {};
+  const c = E.ot, o = T_().ots.find(x => x.id === c.id), b = borrador(o.id), ru = T_().rutinas[o.rutina], toca = tocaEq(ru, o, c.parte, c.eq), p = ru.def.partes[c.parte], resp = {};
   p.secciones.forEach(s => s.items.filter(toca).forEach(it => { const k = claveT(c.parte, c.eq, it.id); if (b.resp[k]) resp[k] = b.resp[k]; }));
   const nNo = Object.values(resp).filter(v => v.e === 'no').length;
   await DB.encolar({ uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: 'TERMO', otsem: o.id, resp, obs: String(b.obs || '').trim(), tec: E.sesion.id });
@@ -703,7 +707,7 @@ document.addEventListener('click', async ev => {
   }
   if (a === 'todo-ok'){
     const o = T_().ots.find(x => x.id === E.ot.id), ru = T_().rutinas[o.rutina], r = borrador(o.id).resp;
-    ru.def.partes[E.ot.parte].secciones.forEach(s => s.items.filter(tocaTarea(ru, o)).forEach(it => { const k = claveT(E.ot.parte, E.ot.eq, it.id); r[k] = Object.assign(r[k] || {}, { e: (r[k] || {}).e || 'si' }); }));
+    ru.def.partes[E.ot.parte].secciones.forEach(s => s.items.filter(tocaEq(ru, o, E.ot.parte, E.ot.eq)).forEach(it => { const k = claveT(E.ot.parte, E.ot.eq, it.id); r[k] = Object.assign(r[k] || {}, { e: (r[k] || {}).e || 'si' }); }));
     guardarBorrador(); dibujar(); return;
   }
   if (a === 'todo-borrar'){
