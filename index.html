@@ -63,6 +63,12 @@ button.card{font:inherit;color:inherit}
 .sec{font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:8px;padding-bottom:4px;border-bottom:2px solid var(--line)}
 .it2{padding:9px 0;border-bottom:1px solid #eef2f0;font-size:15.5px}.it2 .fila{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .it2 textarea{width:100%;border:1px solid #b4c2bd;border-radius:9px;padding:8px;margin-top:6px;font-size:16px}
+.plano-w{overflow:auto;border:1px solid #b4c2bd;border-radius:9px;max-height:68vh;margin-top:6px;background:#fff;-webkit-overflow-scrolling:touch}
+.plano{position:relative}.plano img{width:100%;display:block;user-select:none;-webkit-user-select:none}
+.plano .pt{position:absolute;transform:translate(-50%,-50%);min-width:30px;height:30px;border-radius:15px;border:2px solid #c0392b;background:rgba(255,255,255,.88);font:700 11px system-ui,sans-serif;padding:0 3px;color:#c0392b;line-height:26px}
+.plano .pt.ok{background:#15803d;border-color:#15803d;color:#fff;font-size:15px}.plano .pt.mal{background:#c0392b;color:#fff;font-size:14px}
+.pt-pop{position:fixed;left:0;right:0;bottom:0;z-index:50;background:#fff;border-top:2px solid var(--pri);padding:12px;box-shadow:0 -8px 24px rgba(0,0,0,.2)}
+.pt-pop .ops{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.pt-pop .ops button{min-height:50px;border-radius:9px;border:1px solid #b4c2bd;background:#fff;font-weight:700;font-size:15px;text-align:left;padding:0 12px}
 .med{display:flex;gap:6px;margin-top:6px}.med label{flex:1;display:flex;flex-direction:column;font-size:12px;color:var(--muted)}
 .med input{border:1px solid #b4c2bd;border-radius:9px;padding:8px;min-height:44px;font-size:16px;width:100%}
 .sn button:disabled{opacity:.6}
@@ -547,6 +553,7 @@ const claveT = (pi, ei, id) => pi + '|' + ei + '|' + id;
 // Las tareas de la rutina que no corresponden a este equipo (las sacó el supervisor) no se muestran
 const tocaEq = (ru, ot, pi, ei) => { const t = tocaTarea(ru, ot), ex = ((ru.def.partes[pi].equipos[ei] || {}).excluir) || []; return it => t(it) && ex.indexOf(it.id) < 0; };
 function tareaLista(v, it){
+  if (it.plano) return !!v && Object.keys(v.pts || {}).length >= it.plano.pts.length; // plano: todos los puntos marcados
   if (!v || !v.e) return false;
   if (v.e === 'nc') return true; // no corresponde a este equipo: no lleva medición
   if (v.e === 'no') return !!String(v.obs || '').trim(); // con observación: alcanza con explicar (la medición puede no poder hacerse)
@@ -635,10 +642,11 @@ function vOt(){
     html += `<div class="sec">${esc(s.titulo)}</div>`;
     items.forEach(it => {
       const k = claveT(c.parte, c.eq, it.id), v = b.resp[k] || {}, abierta = ab[o.rutina + '|' + (e.nombre || e.cod) + '|' + c.parte + '.' + it.id];
-      html += `<div class="it2"><div class="fila"><span>${esc(it.t)}${it.nota ? `<br><span class="m">${esc(it.nota)}</span>` : ''}${abierta ? `<br><span class="pill p-w">Ya informado: ${esc(abierta)}</span>` : ''}</span>
-        <span class="sn"><button class="si" data-a="tr" data-k="${k}" data-v="si" aria-pressed="${v.e === 'si'}" aria-label="Sin observación">✔</button><button class="no" data-a="tr" data-k="${k}" data-v="no" aria-pressed="${v.e === 'no'}" aria-label="Con observación">✖</button><button class="nc" data-a="tr" data-k="${k}" data-v="nc" aria-pressed="${v.e === 'nc'}" aria-label="No corresponde a este equipo">N/C</button></span></div>
-        ${it.med && v.e !== 'nc' ? `<div class="med">${(it.rst ? ['r', 's', 't'] : ['val']).map(f => `<label>${f === 'val' ? 'Valor' : f.toUpperCase()}<input inputmode="decimal" data-tk="${k}" data-f="${f}" value="${esc(v[f] || '')}"></label>`).join('')}</div>` : ''}
-        ${v.e === 'no' || v.e === 'nc' ? `<textarea data-tk="${k}" data-f="obs" rows="2" maxlength="300" placeholder="${v.e === 'nc' ? '¿Por qué no corresponde? (opcional, ej.: tiene un solo motor)' : '¿Qué observaste? (obligatorio)'}">${esc(v.obs || '')}</textarea>` : ''}</div>`;
+      if (it.plano){ html += vPlano(it, k, v); return; }
+      html += `<div class="it2"><div class="fila"><span>${esc(it.t)}${it.nota ? `<br><span class="m">${esc(it.nota)}</span>` : ''}${it.max && parseFloat(String(v.val || '').replace(',', '.')) > it.max ? `<br><span class="pill p-b">Supera ${it.max} ${esc(it.u || '')}</span>` : ''}${abierta ? `<br><span class="pill p-w">Ya informado: ${esc(abierta)}</span>` : ''}</span>
+        <span class="sn"><button class="si" data-a="tr" data-k="${k}" data-v="si" aria-pressed="${v.e === 'si'}" aria-label="Sin observación">✔</button><button class="no" data-a="tr" data-k="${k}" data-v="no" aria-pressed="${v.e === 'no'}" aria-label="Con observación">✖</button><button class="nc" data-a="tr" data-k="${k}" data-v="nc" aria-pressed="${v.e === 'nc'}" aria-label="No aplica: la tarea no existe en este equipo">N/A</button></span></div>
+        ${it.med && v.e !== 'nc' ? `<div class="med">${(it.rst ? ['r', 's', 't'] : ['val']).map((f, i) => `<label>${f === 'val' ? (it.u ? 'Valor (' + esc(it.u) + ')' : 'Valor') : esc((it.rot || ['R', 'S', 'T'])[i])}<input inputmode="decimal" data-tk="${k}" data-f="${f}" value="${esc(v[f] || '')}"></label>`).join('')}</div>` : ''}
+        ${v.e === 'no' || v.e === 'nc' ? `<textarea data-tk="${k}" data-f="obs" rows="2" maxlength="300" placeholder="${v.e === 'nc' ? '¿Por qué no aplica? (opcional, ej.: tiene un solo motor)' : '¿Qué observaste? (obligatorio)'}">${esc(v.obs || '')}</textarea>` : ''}</div>`;
     });
   });
   const exc = ((e || {}).excluir) || [], anuales = ru.sem || o.anual ? [] : p.secciones.flatMap(s => s.items).filter(it => it.frec >= 360 && exc.indexOf(it.id) < 0);
@@ -652,13 +660,80 @@ function vOt(){
     ${cerrado ? `<div class="m">${esc(e.cod || '')} · <span class="pill p-ok">Guardado por ${esc(por)}</span></div>`
     : `<div class="m" id="ot-prog-m">${esc(e.cod || '')} ${e.cod ? '·' : ''} ${hE} de ${nE} tareas</div><div class="prog"><i id="ot-prog-i" style="width:${nE ? Math.round(hE / nE * 100) : 0}%"></i></div>`}</div>
   ${cerrado ? '<p class="o">Este equipo ya está guardado. Si hay que corregir algo, avisá al supervisor.</p>' : `<div class="grid2"><button class="btn" data-a="todo-ok">Marcar todo ✔</button><button class="btn" data-a="todo-borrar" ${hE ? '' : 'disabled'}>Desmarcar todo este equipo</button></div>
-    <p class="m" style="margin:0">Para desmarcar una sola tarea, tocá de nuevo el ✔, la ✖ o N/C. <b>N/C</b> = esa tarea no existe en este equipo (por ejemplo, no tiene segundo motor): no va como problema, el supervisor la saca de la rutina.</p>`}
+    <p class="m" style="margin:0">Para desmarcar una sola tarea, tocá de nuevo el ✔, la ✖ o N/A. <b>N/A = no aplica</b>: esa tarea no existe en este equipo (por ejemplo, no tiene segundo motor). No va como problema: el supervisor la saca de la rutina.</p>`}
   <div>${html}</div>
   ${anuales.length && !cerrado ? `<details><summary class="m">${anuales.length} tareas anuales: no se hacen esta semana</summary>${anuales.map(it => `<div class="it2 m">${esc(it.t)}</div>`).join('')}</details>` : ''}
   ${o.estado === 'hecha' ? '' : `<label class="f">Observación general de la OT (opcional, va con cada equipo que guardes)<textarea id="ot-obs" rows="2" maxlength="500">${esc(b.obs)}</textarea></label>`}
   ${aviso()}
   ${cerrado ? '' : `<button class="big" id="ot-guardar" data-a="guardar-eq" ${listo ? '' : 'disabled'}>${listo ? 'GUARDAR ESTE EQUIPO' : `Guardar este equipo (faltan ${nE - hE} tareas)`}</button>`}
   <p class="o">${h} de ${t} equipos guardados · la OT se cierra sola cuando están todos</p></main>`;
+}
+/* ---------- plano (ej. ensayo de iluminación de cocheras): se toca cada punto y se elige cómo está ----------
+   Códigos como en el plano de papel: ✓ OK · ☒ sin funcionar · 1 efecto estrobo · 2 suelta / mal calzada · 3 faltan piezas · 4 no instalado */
+const PT_COD = { ok: ['✓', 'OK'], sf: ['☒', 'Sin funcionar'], '1': ['1', 'Efecto estrobo'], '2': ['2', 'Suelta / mal calzada'], '3': ['3', 'Faltan piezas'], '4': ['4', 'No instalado'] };
+function ptResumen(it, v){
+  const m = (v && v.pts) || {}, mal = {}; let ok = 0;
+  Object.keys(m).forEach(i => { if (m[i] === 'ok') ok++; else { const c = it.plano.pts[i][0]; (mal[c] = mal[c] || []).push(PT_COD[m[i]][1]); } });
+  const nMal = Object.keys(m).length - ok;
+  return { ok, nMal, faltan: it.plano.pts.length - ok - nMal,
+    obs: Object.keys(mal).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1))).map(c => c + ': ' + mal[c].join(', ')).join(' · ') };
+}
+function ptTxtResumen(it, v){ const z = ptResumen(it, v); return `${it.plano.pts.length} luminarias · <b>${z.ok}</b> OK · <b style="color:var(--bad)">${z.nMal}</b> con falla · ${z.faltan} sin marcar`; }
+function vPlano(it, k, v){
+  const P = it.plano, zoom = E.planoZoom || 3;
+  return `<div class="it2"><div><b>${esc(it.t)}</b>${it.nota ? `<br><span class="m">${esc(it.nota)}</span>` : ''}</div>
+    <p class="m" style="margin:4px 0">Tocá cada punto del plano y elegí cómo está. Acercá o alejá con los botones; deslizá para recorrerlo.</p>
+    <div class="grid2"><button class="btn" data-a="pt-zoom" data-z="-1">Alejar −</button><button class="btn" data-a="pt-zoom" data-z="1">Acercar +</button></div>
+    <div class="plano-w" id="plano-w"><div class="plano" style="width:${zoom * 100}%"><img src="${esc(P.img)}" alt="Plano" draggable="false">
+      ${P.pts.map((q, i) => { const m = (v.pts || {})[i]; return `<button class="pt ${m === 'ok' ? 'ok' : m ? 'mal' : ''}" data-a="pt" data-k="${k}" data-i="${i}" style="left:${(q[1] / P.w * 100).toFixed(2)}%;top:${(q[2] / P.h * 100).toFixed(2)}%">${m ? PT_COD[m][0] : esc(q[0])}</button>`; }).join('')}
+    </div></div>
+    <p class="m" id="pt-res" style="margin:6px 0">${ptTxtResumen(it, v)}</p>
+    <button class="btn" data-a="pt-todos" data-k="${k}">Marcar las que faltan como OK ✓</button>
+    <p class="m" style="margin:6px 0 0">✓ OK · ☒ Sin funcionar · 1 Efecto estrobo · 2 Suelta / mal calzada · 3 Faltan piezas · 4 No instalado</p></div>`;
+}
+function ptTarea(k){ const o = T_().ots.find(x => x.id === E.ot.id), ru = T_().rutinas[o.rutina], id = k.split('|')[2]; return ru.def.partes[E.ot.parte].secciones.flatMap(s => s.items).find(x => x.id === id); }
+// Guarda la marca, arma la observación (las fallas por circuito) y actualiza la pantalla sin redibujar (no se pierde el lugar del plano)
+function ptMarcar(k, i, val){
+  const it = ptTarea(k), r = borrador(E.ot.id).resp, v = r[k] = r[k] || {}; v.pts = v.pts || {};
+  if (val === 'x') delete v.pts[i]; else v.pts[i] = val;
+  const z = ptResumen(it, v);
+  if (z.nMal){ v.e = 'no'; v.obs = z.obs; } else { delete v.obs; if (!z.faltan) v.e = 'si'; else delete v.e; }
+  guardarBorrador();
+  const b = document.querySelector(`[data-a="pt"][data-k="${CSS.escape(k)}"][data-i="${i}"]`);
+  if (b){ const m = v.pts[i]; b.className = 'pt ' + (m === 'ok' ? 'ok' : m ? 'mal' : ''); b.textContent = m ? PT_COD[m][0] : it.plano.pts[i][0]; }
+  const res = document.getElementById('pt-res'); if (res) res.innerHTML = ptTxtResumen(it, v);
+  actualizarProgresoOt();
+}
+function ptAbrir(k, i){
+  cerrarPt();
+  const it = ptTarea(k), v = (borrador(E.ot.id).resp[k] || {}), m = (v.pts || {})[i];
+  const d = document.createElement('div'); d.className = 'pt-pop';
+  d.innerHTML = `<b>Luminaria ${esc(it.plano.pts[i][0])}</b>${m ? ` · ahora: ${PT_COD[m][1]}` : ''}
+    <div class="ops">${Object.keys(PT_COD).map(c => `<button data-a="pt-set" data-k="${k}" data-i="${i}" data-v="${c}" style="${c === 'ok' ? 'color:#15803d' : 'color:#c0392b'}">${PT_COD[c][0]} ${PT_COD[c][1]}</button>`).join('')}
+    <button data-a="pt-set" data-k="${k}" data-i="${i}" data-v="x">Borrar la marca</button><button data-a="pt-cerrar">Cancelar</button></div>`;
+  document.body.appendChild(d);
+}
+// Medición con tope (ej. tableros: no más de 50 °C): si lo supera, la tarea queda con ✖ y la observación escrita
+function topeMed(k, val){
+  const it = ptTarea(k); if (!it || !it.max) return;
+  const n = parseFloat(String(val).replace(',', '.')), r = borrador(E.ot.id).resp, v = r[k] = r[k] || {};
+  if (n > it.max){ v.e = 'no'; if (!v.obs || v.obsAuto) { v.obs = 'Supera ' + it.max + ' ' + (it.u || '') + ': medido ' + n + ' ' + (it.u || ''); v.obsAuto = true; } }
+  else if (v.obsAuto){ delete v.obs; delete v.obsAuto; if (v.e === 'no') delete v.e; }
+  else return;
+  guardarBorrador(); dibujar();
+}
+function cerrarPt(){ document.querySelectorAll('.pt-pop').forEach(x => x.remove()); }
+// Para el PDF: el plano con las marcas, armado en el celular (también sin señal)
+async function planoMarcado(it, v){
+  const img = await new Promise((ok, mal) => { const im = new Image(); im.onload = () => ok(im); im.onerror = mal; im.src = it.plano.img; });
+  const W = Math.min(2400, img.naturalWidth), z = W / it.plano.w, cv = document.createElement('canvas');
+  cv.width = W; cv.height = Math.round(it.plano.h * z);
+  const g = cv.getContext('2d'); g.drawImage(img, 0, 0, cv.width, cv.height);
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = 'bold 20px sans-serif';
+  it.plano.pts.forEach((q, i) => { const m = (v.pts || {})[i]; if (!m) return;
+    g.beginPath(); g.arc(q[1] * z, q[2] * z, 17, 0, 2 * Math.PI); g.fillStyle = m === 'ok' ? '#15803d' : '#c0392b'; g.fill();
+    g.fillStyle = '#fff'; g.fillText(m === 'ok' ? '✓' : m === 'sf' ? 'X' : m, q[1] * z, q[2] * z + 1); });
+  return cv.toDataURL('image/jpeg', 0.7);
 }
 // Al escribir una medición: se actualiza el avance sin redibujar (para no perder el campo)
 function actualizarProgresoOt(){
@@ -674,8 +749,12 @@ function actualizarProgresoOt(){
 async function guardarEquipo(){
   const c = E.ot, o = T_().ots.find(x => x.id === c.id), b = borrador(o.id), ru = T_().rutinas[o.rutina], toca = tocaEq(ru, o, c.parte, c.eq), p = ru.def.partes[c.parte], resp = {};
   p.secciones.forEach(s => s.items.filter(toca).forEach(it => { const k = claveT(c.parte, c.eq, it.id); if (b.resp[k]) resp[k] = b.resp[k]; }));
-  const nNo = Object.values(resp).filter(v => v.e === 'no').length;
-  await DB.encolar({ uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: 'TERMO', otsem: o.id, resp, obs: String(b.obs || '').trim(), tec: E.sesion.id });
+  const nNo = Object.values(resp).filter(v => v.e === 'no').length, img = {};
+  for (const s of p.secciones) for (const it of s.items.filter(toca)) {
+    const k = claveT(c.parte, c.eq, it.id);
+    if (it.plano && resp[k]) { try { img[k] = await planoMarcado(it, resp[k]); } catch(x){} }
+  }
+  await DB.encolar({ uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: 'TERMO', otsem: o.id, resp, img, obs: String(b.obs || '').trim(), tec: E.sesion.id });
   Object.keys(resp).forEach(k => { delete b.resp[k]; });
   await DB.set('borradores', E.borr);
   E.cola = await DB.cola();
@@ -737,9 +816,18 @@ document.addEventListener('click', async ev => {
     if (v.e === t.dataset.v) delete v.e; else v.e = t.dataset.v;
     E.msg = ''; guardarBorrador(); dibujar(); return;
   }
+  if (a === 'pt'){ ptAbrir(t.dataset.k, +t.dataset.i); return; }
+  if (a === 'pt-set'){ ptMarcar(t.dataset.k, +t.dataset.i, t.dataset.v); cerrarPt(); return; }
+  if (a === 'pt-cerrar'){ cerrarPt(); return; }
+  if (a === 'pt-todos'){ const it = ptTarea(t.dataset.k), v = borrador(E.ot.id).resp[t.dataset.k] || {}; it.plano.pts.forEach((q, i) => { if (!(v.pts || {})[i]) ptMarcar(t.dataset.k, i, 'ok'); }); return; }
+  if (a === 'pt-zoom'){ // cambia el zoom manteniendo la zona que se estaba mirando
+    const w = document.getElementById('plano-w'), fx = w ? (w.scrollLeft + w.clientWidth / 2) / w.scrollWidth : .5, fy = w ? (w.scrollTop + w.clientHeight / 2) / w.scrollHeight : .5;
+    E.planoZoom = Math.max(1, Math.min(6, (E.planoZoom || 3) + Number(t.dataset.z))); dibujar();
+    const n = document.getElementById('plano-w'); if (n){ n.scrollLeft = fx * n.scrollWidth - n.clientWidth / 2; n.scrollTop = fy * n.scrollHeight - n.clientHeight / 2; }
+    return; }
   if (a === 'todo-ok'){
     const o = T_().ots.find(x => x.id === E.ot.id), ru = T_().rutinas[o.rutina], r = borrador(o.id).resp;
-    ru.def.partes[E.ot.parte].secciones.forEach(s => s.items.filter(tocaEq(ru, o, E.ot.parte, E.ot.eq)).forEach(it => { const k = claveT(E.ot.parte, E.ot.eq, it.id); r[k] = Object.assign(r[k] || {}, { e: (r[k] || {}).e || 'si' }); }));
+    ru.def.partes[E.ot.parte].secciones.forEach(s => s.items.filter(tocaEq(ru, o, E.ot.parte, E.ot.eq)).filter(it => !it.plano).forEach(it => { const k = claveT(E.ot.parte, E.ot.eq, it.id); r[k] = Object.assign(r[k] || {}, { e: (r[k] || {}).e || 'si' }); }));
     guardarBorrador(); dibujar(); return;
   }
   if (a === 'todo-borrar'){
@@ -793,6 +881,7 @@ document.addEventListener('input', ev => {
 });
 document.addEventListener('change', ev => {
   const el = ev.target;
+  if (el.dataset.tk && el.dataset.f === 'val') topeMed(el.dataset.tk, el.value);
   if (el.id === 'l-bomb' && el.value){ E.bomberoPin = el.value; E.pin = ''; E.msg = ''; dibujar(); }
   if (el.id === 'c-foto') fotoElegida(el);
 });
