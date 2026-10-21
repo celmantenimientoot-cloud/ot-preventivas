@@ -67,6 +67,7 @@ button.card{font:inherit;color:inherit}
 .plano{position:relative}.plano img{width:100%;display:block;user-select:none;-webkit-user-select:none}
 .plano .pt{position:absolute;transform:translate(-50%,-50%);min-width:30px;height:30px;border-radius:15px;border:2px solid #c0392b;background:rgba(255,255,255,.88);font:700 11px system-ui,sans-serif;padding:0 3px;color:#c0392b;line-height:26px}
 .plano .pt.ok{background:#15803d;border-color:#15803d;color:#fff;font-size:15px}.plano .pt.mal{background:#c0392b;color:#fff;font-size:14px}
+.carpeta{text-align:left;width:100%;cursor:pointer;padding:16px}.carpeta .t{font-size:22px}.carpeta .ico{font-size:26px}.carpeta .m{font-size:15px;margin-top:4px}
 .pt-pop{position:fixed;left:0;right:0;bottom:0;z-index:50;background:#fff;border-top:2px solid var(--pri);padding:12px;box-shadow:0 -8px 24px rgba(0,0,0,.2)}
 .pt-pop .ops{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.pt-pop .ops button{min-height:50px;border-radius:9px;border:1px solid #b4c2bd;background:#fff;font-weight:700;font-size:15px;text-align:left;padding:0 12px}
 .med{display:flex;gap:6px;margin-top:6px}.med label{flex:1;display:flex;flex-direction:column;font-size:12px;color:var(--muted)}
@@ -611,8 +612,23 @@ function vLoginTec(){
   </main>`;
 }
 const etiquetaFrec = ru => ru.def.partes.every(p => p.secciones.every(s => s.items.every(it => it.frec >= 360))) ? 'Anual' : 'Semestral';
+// Carpetas por instalación: si el técnico tiene OT de más de una, primero elige la carpeta
+const INST_TEC = { termo: { nom: 'Termomecánica', ico: '❄️', col: '#2e5a88' }, elec: { nom: 'Eléctrico', ico: '⚡', col: '#b7791f' }, otra: { nom: 'Otras', ico: '🔧', col: '#5a6b65' } };
+const instOt = o => { const i = String((T_().rutinas[o.rutina] || {}).inst || '').toUpperCase(); return /^TERMOMEC/.test(i) || !i ? 'termo' : /^ELEC/.test(i) ? 'elec' : 'otra'; };
 function vInicioTec(){
-  const L = T_().ots.slice().sort((a, b) => (a.estado === 'hecha') - (b.estado === 'hecha') || (a.semana < b.semana ? -1 : 1));
+  const todas = T_().ots, insts = Object.keys(INST_TEC).filter(k => todas.some(o => instOt(o) === k));
+  if (insts.length > 1 && !insts.includes(E.inst)) {
+    const carpeta = k => { const n = todas.filter(o => instOt(o) === k && o.estado !== 'hecha').length, I = INST_TEC[k];
+      return `<button class="card carpeta" data-a="inst" data-k="${k}" style="border-left:8px solid ${n ? I.col : '#2d8a4e'}">
+        <div class="t"><span class="ico">${I.ico}</span> ${I.nom}</div>
+        <div class="m">${n ? `<b>${n}</b> OT por hacer` : '<span class="pill p-ok">✔ Todo hecho</span>'}</div></button>`; };
+    return barra('Hola, ' + E.sesion.nombre, 'Mis OT · ' + esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + `<main>${aviso()}
+    <h2 style="margin:4px 0 10px">Elegí la instalación</h2>${insts.map(carpeta).join('')}
+    <p class="o">Datos del ${E.cat.bajado ? fmtD(E.cat.bajado) + ' ' + E.cat.bajado.slice(11, 16) : '–'} · abrí la app con señal al empezar la semana</p></main>`;
+  }
+  const enCarpeta = insts.length > 1 ? E.inst : '';
+  // Solo lo que falta: las OT hechas (ya recibidas por el sistema) no se muestran, para no confundir
+  const L = todas.filter(o => o.estado !== 'hecha' && (!enCarpeta || instOt(o) === enCarpeta)).sort((a, b) => a.semana < b.semana ? -1 : 1);
   const card = o => {
     const ru = T_().rutinas[o.rutina] || {}, [h, t] = avanceOt(o), sinEnviar = enCola(o.id);
     const pill = o.estado === 'hecha' ? '<span class="pill p-ok">Hecha</span>' : h === t ? '<span class="pill p-w">Completa · sin enviar</span>'
@@ -623,8 +639,9 @@ function vInicioTec(){
       ${(o.con || []).length ? `<div class="m">Con: <b>${esc(o.con.join(', '))}</b></div>` : ''}
       ${o.estado === 'hecha' ? '' : `<div class="prog"><i style="width:${t ? Math.round(h / t * 100) : 0}%"></i></div>`}</button>`;
   };
-  return barra('Hola, ' + E.sesion.nombre, 'Mis OT · ' + esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + `<main>${aviso()}
-  ${L.length ? L.map(card).join('') : '<div class="aviso p-i">No tenés OT asignadas por ahora. Se actualiza sola cuando hay señal.</div>'}
+  const I = INST_TEC[enCarpeta];
+  return barra(I ? I.ico + ' ' + I.nom : 'Hola, ' + E.sesion.nombre, 'Mis OT · ' + esc(E.tablet.ed), I ? '<button data-a="inst" data-k="">‹ Carpetas</button>' : '<button data-a="salir">Salir</button>') + `<main>${aviso()}
+  ${L.length ? L.map(card).join('') : `<div class="aviso p-ok">✔ ${I ? 'Todo hecho en ' + I.nom + '.' : 'No tenés OT por hacer.'} Las nuevas aparecen solas cuando hay señal.</div>`}
   <p class="o">Datos del ${E.cat.bajado ? fmtD(E.cat.bajado) + ' ' + E.cat.bajado.slice(11, 16) : '–'} · abrí la app con señal al empezar la semana</p></main>`;
 }
 function vOt(){
@@ -808,6 +825,7 @@ document.addEventListener('click', async ev => {
   }
   if (a === 'usar-tarjeta'){ E.usarTarjeta = true; E.msg = ''; dibujar(); return; }
   if (a === 'usar-pin'){ E.usarTarjeta = false; E.msg = ''; dibujar(); return; }
+  if (a === 'inst'){ E.inst = t.dataset.k; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'abrir-ot'){ E.ot = { id: t.dataset.id, parte: 0, eq: 0 }; E.pantalla = 'ot'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'parte'){ E.ot.parte = +t.dataset.i; E.ot.eq = 0; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'equipo'){ E.ot.eq = +t.dataset.i; dibujar(); window.scrollTo(0, 0); return; }
