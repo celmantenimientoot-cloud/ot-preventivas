@@ -549,10 +549,16 @@ function vControl(){
    Lo que carga queda en el celular (borrador) hasta "Terminar OT"; ahí se encola y se envía cuando hay señal. */
 const esTec = () => !!(E.tablet && E.tablet.tipo === 'cel');
 const T_ = () => (E.cat && E.cat.termo) || { ots: [], rutinas: {}, abiertas: {} };
-const tocaTarea = (ru, ot) => it => ru.sem || ot.anual || it.frec < 360;
+// Mensuales siempre; las especiales, semestrales y anuales solo si el plan las marca esa semana para ese equipo
+// (ot.tipos: amarillo E, azul S, naranja A, lo calcula el servidor con el color del plan). Sin dato, la regla de antes.
+const tocaTarea = (ru, ot, tipo) => it => { const f = Number(it.frec) || 30; if (ru.sem || f <= 31) return true; if (!tipo) return ot.anual || f < 360; if (ot.anual || tipo === 'A') return true; return f >= 330 ? false : f >= 170 ? tipo === 'S' : tipo === 'E'; };
 const claveT = (pi, ei, id) => pi + '|' + ei + '|' + id;
 // Las tareas de la rutina que no corresponden a este equipo (las sacó el supervisor) no se muestran
-const tocaEq = (ru, ot, pi, ei) => { const t = tocaTarea(ru, ot), ex = ((ru.def.partes[pi].equipos[ei] || {}).excluir) || []; return it => t(it) && ex.indexOf(it.id) < 0; };
+const tocaEq = (ru, ot, pi, ei) => { const t = tocaTarea(ru, ot, (ot.tipos || {})[pi + '|' + ei]), ex = ((ru.def.partes[pi].equipos[ei] || {}).excluir) || []; return it => t(it) && ex.indexOf(it.id) < 0; };
+// Tareas que no son mensuales: etiqueta con los colores de la leyenda del plan (especial amarillo, semestral azul, anual naranja)
+function frecTag(f){ f = Number(f) || 30; if (f <= 31) return '';
+  const x = f >= 700 ? ['Cada ' + Math.round(f / 360) + ' años', '#e07b10', '#fff'] : f >= 330 ? ['Anual', '#e07b10', '#fff'] : f >= 170 ? ['Semestral', '#2e5a88', '#fff'] : ['Especial · cada ' + Math.round(f / 30) + ' meses', '#ffe600', '#3a3000'];
+  return ` <span class="pill" style="background:${x[1]};color:${x[2]};font-weight:700">${x[0]}</span>`; }
 function tareaLista(v, it){
   if (it.plano) return !!v && Object.keys(v.pts || {}).length >= it.plano.pts.length; // plano: todos los puntos marcados
   if (!v || !v.e) return false;
@@ -660,7 +666,7 @@ function vOt(){
     items.forEach(it => {
       const k = claveT(c.parte, c.eq, it.id), v = b.resp[k] || {}, abierta = ab[o.rutina + '|' + (e.nombre || e.cod) + '|' + c.parte + '.' + it.id];
       if (it.plano){ html += vPlano(it, k, v); return; }
-      html += `<div class="it2"><div class="fila"><span>${esc(it.t)}${it.nota ? `<br><span class="m">${esc(it.nota)}</span>` : ''}${it.max && parseFloat(String(v.val || '').replace(',', '.')) > it.max ? `<br><span class="pill p-b">Supera ${it.max} ${esc(it.u || '')}</span>` : ''}${abierta ? `<br><span class="pill p-w">Ya informado: ${esc(abierta)}</span>` : ''}</span>
+      html += `<div class="it2"><div class="fila"><span>${esc(it.t)}${frecTag(it.frec)}${it.nota ? `<br><span class="m">${esc(it.nota)}</span>` : ''}${it.max && parseFloat(String(v.val || '').replace(',', '.')) > it.max ? `<br><span class="pill p-b">Supera ${it.max} ${esc(it.u || '')}</span>` : ''}${abierta ? `<br><span class="pill p-w">Ya informado: ${esc(abierta)}</span>` : ''}</span>
         <span class="sn"><button class="si" data-a="tr" data-k="${k}" data-v="si" aria-pressed="${v.e === 'si'}" aria-label="Sin observación">✔</button><button class="no" data-a="tr" data-k="${k}" data-v="no" aria-pressed="${v.e === 'no'}" aria-label="Con observación">✖</button><button class="nc" data-a="tr" data-k="${k}" data-v="nc" aria-pressed="${v.e === 'nc'}" aria-label="No aplica: la tarea no existe en este equipo">N/A</button></span></div>
         ${it.med && v.e !== 'nc' ? `<div class="med">${(it.rst ? ['r', 's', 't'] : ['val']).map((f, i) => `<label>${f === 'val' ? (it.u ? 'Valor (' + esc(it.u) + ')' : 'Valor') : esc((it.rot || ['R', 'S', 'T'])[i])}<input inputmode="decimal" data-tk="${k}" data-f="${f}" value="${esc(v[f] || '')}"></label>`).join('')}</div>` : ''}
         ${v.e === 'no' || v.e === 'nc' ? `<textarea data-tk="${k}" data-f="obs" rows="2" maxlength="300" placeholder="${v.e === 'nc' ? '¿Por qué no aplica? (opcional, ej.: tiene un solo motor)' : '¿Qué observaste? (obligatorio)'}">${esc(v.obs || '')}</textarea>` : ''}</div>`;
