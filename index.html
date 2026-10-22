@@ -689,7 +689,8 @@ function vOt(){
     <p class="m" style="margin:0">Para desmarcar una sola tarea, tocá de nuevo el ✔, la ✖ o N/A. <b>N/A = no aplica</b>: esa tarea no existe en este equipo (por ejemplo, no tiene segundo motor). No va como problema: el supervisor la saca de la rutina.</p>`}
   <div>${html}</div>
   ${anuales.length && !cerrado ? `<details><summary class="m">${anuales.length} tareas anuales: no se hacen esta semana</summary>${anuales.map(it => `<div class="it2 m">${esc(it.t)}</div>`).join('')}</details>` : ''}
-  ${o.estado === 'hecha' ? '' : `<label class="f">Observación general de la OT (opcional, va con cada equipo que guardes)<textarea id="ot-obs" rows="2" maxlength="500">${esc(b.obs)}</textarea></label>`}
+  ${o.estado === 'hecha' ? '' : e.noPlan ? `<label class="f">Observación de esta sala (opcional, va solo con esta sala)<textarea id="eq-obs" rows="2" maxlength="500">${esc((b.obsEq || {})[c.parte + '|' + c.eq] || '')}</textarea></label>`
+    : `<label class="f">Observación general de la OT (opcional, va con cada equipo que guardes)<textarea id="ot-obs" rows="2" maxlength="500">${esc(b.obs)}</textarea></label>`}
   ${aviso()}
   ${cerrado ? '' : `<button class="big" id="ot-guardar" data-a="guardar-eq" ${listo ? '' : 'disabled'}>${listo ? 'GUARDAR ESTE EQUIPO' : `Guardar este equipo (faltan ${nE - hE} tareas)`}</button>`}
   <p class="o">${h} de ${t} equipos guardados · la OT se cierra sola cuando están todos</p></main>`;
@@ -780,8 +781,9 @@ async function guardarEquipo(){
     const k = claveT(c.parte, c.eq, it.id);
     if (it.plano && resp[k]) { try { img[k] = await planoMarcado(it, resp[k]); } catch(x){} }
   }
-  await DB.encolar({ uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: 'TERMO', otsem: o.id, resp, img, obs: String(b.obs || '').trim(), tec: E.sesion.id });
+  await DB.encolar({ uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: 'TERMO', otsem: o.id, resp, img, obs: String((p.equipos[c.eq] || {}).noPlan ? (b.obsEq || {})[c.parte + '|' + c.eq] || '' : b.obs || '').trim(), tec: E.sesion.id });
   Object.keys(resp).forEach(k => { delete b.resp[k]; });
+  if (b.obsEq) delete b.obsEq[c.parte + '|' + c.eq];
   await DB.set('borradores', E.borr);
   E.cola = await DB.cola();
   // El siguiente equipo que falte (primero en este grupo, después en los otros)
@@ -900,6 +902,7 @@ document.addEventListener('input', ev => {
   const el = ev.target;
   if (el.dataset.tk){ const r = borrador(E.ot.id).resp; r[el.dataset.tk] = Object.assign(r[el.dataset.tk] || {}, { [el.dataset.f]: el.value }); guardarBorrador(); actualizarProgresoOt(); return; }
   if (el.id === 'ot-obs'){ borrador(E.ot.id).obs = el.value; guardarBorrador(); return; }
+  if (el.id === 'eq-obs'){ const b = borrador(E.ot.id); (b.obsEq = b.obsEq || {})[E.ot.parte + '|' + E.ot.eq] = el.value; guardarBorrador(); return; }
   if (el.id === 'c-obs') E.control.obs = el.value;
   else if (el.dataset.cambio) E.control.cambio[el.dataset.cambio] = el.value;
   else if (el.dataset.manga) E.control.manga[el.dataset.manga] = el.value;
