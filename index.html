@@ -68,6 +68,25 @@ button.card{font:inherit;color:inherit}
 .plano .pt{position:absolute;transform:translate(-50%,-50%);min-width:30px;height:30px;border-radius:15px;border:2px solid #c0392b;background:rgba(255,255,255,.88);font:700 11px system-ui,sans-serif;padding:0 3px;color:#c0392b;line-height:26px}
 .plano .pt.ok{background:#15803d;border-color:#15803d;color:#fff;font-size:15px}.plano .pt.mal{background:#c0392b;color:#fff;font-size:14px}
 .carpeta{text-align:left;width:100%;cursor:pointer;padding:16px}.carpeta .t{font-size:22px}.carpeta .ico{font-size:26px}.carpeta .m{font-size:15px;margin-top:4px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.plano .pt,.pt-pop button,.pf-barra button{touch-action:manipulation} /* sin el zoom del doble toque: el plano no se corre solo */
+.plano-w{overscroll-behavior:contain;touch-action:pan-x pan-y}
+/* Plano a pantalla completa, con una barrita flotante (alejar, acercar, salir) */
+.pf-barra{display:none}
+body.plano-full{overflow:hidden}
+.plano-w.full{position:fixed;inset:0;z-index:40;max-height:none;border-radius:0;border:0;margin:0}
+body.plano-full .pf-barra{display:flex;position:fixed;top:8px;right:8px;z-index:45;gap:6px;align-items:center;background:rgba(255,255,255,.95);border:1px solid #b4c2bd;border-radius:10px;padding:4px 6px;box-shadow:0 2px 8px rgba(0,0,0,.2);font-size:12px;max-width:calc(100vw - 16px)}
+.pf-barra button{min-width:40px;height:36px;border-radius:8px;border:1px solid #b4c2bd;background:#fff;font:700 18px system-ui,sans-serif}
+.pf-barra button.sal{font-size:14px;padding:0 10px;background:var(--pri);color:#fff;border-color:var(--pri)}
+.pf-barra span{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Celular horizontal: el menú de opciones va de costado (no tapa el plano) y la barra de arriba no queda fija */
+@media (orientation: landscape) and (max-height: 520px){
+  .pt-pop{left:auto !important;top:0;bottom:0;width:min(42vw,280px);border-top:0;border-left:2px solid var(--pri);overflow:auto;padding:8px !important}
+  .pt-pop .ops{grid-template-columns:1fr !important;gap:5px !important}
+  .pt-pop .ops button{min-height:34px !important;font-size:13px !important}
+  .bar,.net{position:static !important}
+  .plano-w{max-height:calc(100vh - 16px)}
+}
 .pt-pop{position:fixed;left:0;right:0;bottom:0;z-index:50;background:#fff;border-top:2px solid var(--pri);padding:12px;box-shadow:0 -8px 24px rgba(0,0,0,.2)}
 .pt-pop .ops{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.pt-pop .ops button{min-height:50px;border-radius:9px;border:1px solid #b4c2bd;background:#fff;font-weight:700;font-size:15px;text-align:left;padding:0 12px}
 .med{display:flex;gap:6px;margin-top:6px}.med label{flex:1;display:flex;flex-direction:column;font-size:12px;color:var(--muted)}
@@ -710,8 +729,9 @@ function vPlano(it, k, v){
   const P = it.plano, zoom = E.planoZoom || 3;
   return `<div class="it2"><div><b>${esc(it.t)}</b>${it.nota ? `<br><span class="m">${esc(it.nota)}</span>` : ''}</div>
     <p class="m" style="margin:4px 0">Tocá cada punto del plano y elegí cómo está. Acercá o alejá con los botones; deslizá para recorrerlo.</p>
-    <div class="grid2"><button class="btn" data-a="pt-zoom" data-z="-1">Alejar −</button><button class="btn" data-a="pt-zoom" data-z="1">Acercar +</button></div>
-    <div class="plano-w" id="plano-w"><div class="plano" style="width:${zoom * 100}%"><img src="${esc(P.img)}" alt="Plano" draggable="false">
+    <div class="grid3"><button class="btn" data-a="pt-zoom" data-z="-1">Alejar −</button><button class="btn" data-a="pt-zoom" data-z="1">Acercar +</button><button class="btn" data-a="pt-full">⛶ Pantalla completa</button></div>
+    <div class="pf-barra" id="pf-barra"><button data-a="pt-zoom" data-z="-1" aria-label="Alejar">−</button><button data-a="pt-zoom" data-z="1" aria-label="Acercar">+</button><span id="pf-res">${ptTxtResumen(it, v)}</span><button data-a="pt-full" class="sal">Salir</button></div>
+    <div class="plano-w${E.planoFull ? ' full' : ''}" id="plano-w"><div class="plano" style="width:${zoom * 100}%"><img src="${esc(P.img)}" alt="Plano" draggable="false">
       ${P.pts.map((q, i) => { const m = (v.pts || {})[i]; return `<button class="pt ${m === 'ok' ? 'ok' : m ? 'mal' : ''}" data-a="pt" data-k="${k}" data-i="${i}" style="left:${(q[1] / P.w * 100).toFixed(2)}%;top:${(q[2] / P.h * 100).toFixed(2)}%">${m ? PT_COD[m][0] : esc(q[0])}</button>`; }).join('')}
     </div></div>
     <p class="m" id="pt-res" style="margin:6px 0">${ptTxtResumen(it, v)}</p>
@@ -729,6 +749,7 @@ function ptMarcar(k, i, val){
   const b = document.querySelector(`[data-a="pt"][data-k="${CSS.escape(k)}"][data-i="${i}"]`);
   if (b){ const m = v.pts[i]; b.className = 'pt ' + (m === 'ok' ? 'ok' : m ? 'mal' : ''); b.textContent = m ? PT_COD[m][0] : it.plano.pts[i][0]; }
   const res = document.getElementById('pt-res'); if (res) res.innerHTML = ptTxtResumen(it, v);
+  const res2 = document.getElementById('pf-res'); if (res2) res2.innerHTML = ptTxtResumen(it, v);
   actualizarProgresoOt();
 }
 function ptAbrir(k, i){
@@ -848,6 +869,10 @@ document.addEventListener('click', async ev => {
   if (a === 'pt'){ ptAbrir(t.dataset.k, +t.dataset.i); return; }
   if (a === 'pt-set'){ ptMarcar(t.dataset.k, +t.dataset.i, t.dataset.v); cerrarPt(); return; }
   if (a === 'pt-cerrar'){ cerrarPt(); return; }
+  if (a === 'pt-full'){ // plano a pantalla completa (sobre todo con el celular horizontal); sin redibujar, para no perder el lugar
+    E.planoFull = !E.planoFull; cerrarPt();
+    const w = document.getElementById('plano-w'); if (w) w.classList.toggle('full', E.planoFull);
+    document.body.classList.toggle('plano-full', E.planoFull); return; }
   if (a === 'pt-todos'){ const it = ptTarea(t.dataset.k), v = borrador(E.ot.id).resp[t.dataset.k] || {}; it.plano.pts.forEach((q, i) => { if (!(v.pts || {})[i]) ptMarcar(t.dataset.k, i, 'ok'); }); return; }
   if (a === 'pt-zoom'){ // cambia el zoom manteniendo la zona que se estaba mirando
     const w = document.getElementById('plano-w'), fx = w ? (w.scrollLeft + w.clientWidth / 2) / w.scrollWidth : .5, fy = w ? (w.scrollTop + w.clientHeight / 2) / w.scrollHeight : .5;
