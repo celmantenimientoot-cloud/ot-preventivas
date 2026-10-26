@@ -68,6 +68,7 @@ button.card{font:inherit;color:inherit}
 .plano .pt{position:absolute;transform:translate(-50%,-50%);min-width:30px;height:30px;border-radius:15px;border:2px solid #c0392b;background:rgba(255,255,255,.88);font:700 11px system-ui,sans-serif;padding:0 3px;color:#c0392b;line-height:26px}
 .plano .pt.ok{background:#15803d;border-color:#15803d;color:#fff;font-size:15px}.plano .pt.mal{background:#c0392b;color:#fff;font-size:14px}
 .carpeta{text-align:left;width:100%;cursor:pointer;padding:16px}.carpeta .t{font-size:22px}.carpeta .ico{font-size:26px}.carpeta .m{font-size:15px;margin-top:4px}
+.sup-b{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eef2f0;font-size:15px}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
 .plano .pt,.pt-pop button,.pf-barra button{touch-action:manipulation} /* sin el zoom del doble toque: el plano no se corre solo */
 .plano-w{overscroll-behavior:contain;touch-action:pan-x pan-y}
@@ -154,7 +155,7 @@ async function enviar(cuerpo){
 }
 const conClave = c => Object.assign({ tablet: E.tablet.id, clave: E.tablet.clave }, c);
 async function guardarCatalogo(j){
-  E.cat = { ahora: j.ahora, equipos: j.equipos, rutinas: j.rutinas, tipos: j.tipos, motivos: j.motivos || {}, hechos: j.hechos || {}, abiertas: j.abiertas || {}, bomberos: j.bomberos, bajado: ahoraIso(),
+  E.cat = { ahora: j.ahora, equipos: j.equipos, rutinas: j.rutinas, tipos: j.tipos, motivos: j.motivos || {}, hechos: j.hechos || {}, por: j.por || {}, abiertas: j.abiertas || {}, bomberos: j.bomberos, bajado: ahoraIso(),
     modo: j.modo || '', termo: j.termo || null, deposito: j.deposito || '' };
   (E.cola || []).forEach(r => depLocal(r)); // lo del depósito que todavía no se envió
   (E.cola || []).filter(r => r.manga).forEach(r => { const eq = (E.cat.equipos || []).find(e => esNicho(e) && e.pos === r.pos); if (eq) mangaLocal(eq, r.manga, r.ts); });
@@ -255,9 +256,9 @@ async function entrarConPin(){
   E.pin = ''; E.msg = 'PIN incorrecto.'; dibujar();
 }
 function iniciarSesion(b){
-  E.sesion = { id: b.id, nombre: b.nombre, desde: ahoraIso() };
+  E.sesion = { id: b.id, nombre: b.nombre, rol: b.rol || '', desde: ahoraIso() };
   sessionStorage.setItem('sesion', JSON.stringify(E.sesion));
-  E.pin = ''; E.msg = ''; E.pantalla = 'inicio'; E.ultimoUso = Date.now();
+  E.pin = ''; E.msg = ''; E.pantalla = b.rol === 'encargado' ? 'superv' : 'inicio'; E.ultimoUso = Date.now(); // el encargado solo mira: va directo a la supervisión
   dibujar(); bajar().then(dibujar);
 }
 function salir(){ E.sesion = null; sessionStorage.removeItem('sesion'); pararCamara(); E.pantalla = 'login'; E.control = null; dibujar(); }
@@ -271,6 +272,34 @@ function hechosDe(tipo){
   return h;
 }
 const equiposDe = tipo => (E.cat.equipos || []).filter(e => e.tipo === tipo);
+const esEncargado = () => !!(E.sesion && (E.sesion.rol === 'encargado' || ((E.cat.bomberos || []).find(b => b.id === E.sesion.id) || {}).rol === 'encargado'));
+// Quién controló cada equipo en el período (lo del servidor + lo de esta tablet que todavía no se envió)
+function porDe(tipo){
+  const id = ronda(tipo, E.tablet.ed, hoyIso()), p = Object.assign({}, (E.cat.por || {})[id] || {});
+  E.cola.forEach(r => { if (!r.manga && !r.deposito && r.tipo === tipo && ronda(tipo, E.tablet.ed, r.ts.slice(0, 10)) === id) p[r.pos] = ((E.cat.bomberos || []).find(b => b.id === r.bombero) || {}).nombre || 'esta tablet'; });
+  return p;
+}
+// Encargado de seguridad: avance de cada recorrida, cuántos controles hizo cada bombero y quién controló cada equipo
+function vSuperv(){
+  const tipos = Object.keys(E.cat.tipos || {}).filter(t => equiposDe(t).some(e => !depFuera(e)));
+  const tipo = tipos.includes(E.supTipo) ? E.supTipo : tipos[0], fil = E.supFil || 'faltan';
+  if (!tipo) return barra('Supervisión', esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + '<main><p class="o">Esta tablet todavía no tiene equipos.</p></main>';
+  const eqs = equiposDe(tipo).filter(e => !depFuera(e)), h = hechosDe(tipo), p = porDe(tipo), hechos = eqs.filter(e => h[e.pos]).length;
+  const cuenta = {}; eqs.forEach(e => { if (h[e.pos]) cuenta[p[e.pos] || 'sin nombre'] = (cuenta[p[e.pos] || 'sin nombre'] || 0) + 1; });
+  const L = eqs.filter(e => fil === 'todos' || (fil === 'hechos' ? h[e.pos] : !h[e.pos]))
+    .sort((a, b) => String(a.piso).localeCompare(String(b.piso), 'es', { numeric: true }) || a.pos.localeCompare(b.pos, 'es', { numeric: true }));
+  return barra('Supervisión · ' + E.sesion.nombre, esc(E.tablet.nombre) + ' · ' + esc(E.tablet.ed) + ' · solo consulta', '<button data-a="salir">Salir</button>') + `<main>${aviso()}
+  <div class="seg">${tipos.map(t => `<button data-a="sup-tipo" data-t="${t}" aria-pressed="${t === tipo}">${esc(E.cat.tipos[t])}</button>`).join('')}</div>
+  <div class="card"><div class="t">${esc(E.cat.tipos[tipo])} · ${nombreQ(hoyIso(), tipo)}</div>
+    <div class="m">OT ${esc(ronda(tipo, E.tablet.ed, hoyIso()))}</div>
+    <div class="prog"><i style="width:${eqs.length ? Math.round(hechos / eqs.length * 100) : 0}%"></i></div>
+    <div class="m" style="margin-top:5px"><b>${hechos} de ${eqs.length}</b> controlados${hechos >= eqs.length ? ' <span class="pill p-ok">Completa</span>' : ` · faltan ${eqs.length - hechos}`}</div></div>
+  <div class="card"><div class="t" style="font-size:16px">Controles por bombero</div>
+    ${Object.keys(cuenta).length ? Object.entries(cuenta).sort((a, b) => b[1] - a[1]).map(([n, c]) => `<div class="sup-b"><span>${esc(n)}</span><b>${c}</b></div>`).join('') : '<p class="o" style="margin:6px 0 0">Todavía nadie controló en este período.</p>'}</div>
+  <div class="seg">${[['faltan', 'Faltan (' + (eqs.length - hechos) + ')'], ['hechos', 'Hechos (' + hechos + ')'], ['todos', 'Todos']].map(([k, n]) => `<button data-a="sup-fil" data-f="${k}" aria-pressed="${k === fil}">${n}</button>`).join('')}</div>
+  <div class="lista">${L.map(e => `<div class="row" style="cursor:default"><span><span class="mono">${esc(e.pos)}</span><br><span class="m">${esc(e.piso)} · ${esc(e.ubic)}</span></span>
+    <span style="text-align:right">${h[e.pos] ? `<span class="pill p-ok">${esc(p[e.pos] || 'Hecho')}</span><br><span class="m">${fmtD(h[e.pos])} ${esc(String(h[e.pos]).slice(11, 16))}</span>` : '<span class="pill p-w">Falta</span>'}</span></div>`).join('') || '<p class="o">No hay equipos en esta lista.</p>'}</div></main>`;
+}
 /* ---------- depósito de reserva de extintores (CEL: posiciones M4SSD) ----------
    Se controlan como cualquier extintor. Al reemplazar un extintor de un piso se elige el del depósito: pasa con sus
    datos al piso y el RETIRADO se guarda en esa posición del depósito, A RECARGAR, hasta que vuelve de DENAPOLI. */
@@ -442,6 +471,7 @@ function vLogin(){
 }
 function vInicio(){
   if (esTec()) return vInicioTec();
+  if (esEncargado()) return vSuperv(); // el encargado de seguridad no carga controles
   const tarjetas = Object.keys(E.cat.tipos || {}).map(tipo => {
     const tot = equiposDe(tipo).filter(e => !depFuera(e)).length, h = Object.keys(hechosDe(tipo)).length;
     if (!tot) return '';
@@ -819,7 +849,7 @@ async function guardarEquipo(){
 
 function dibujar(){
   const app = document.getElementById('app'), antes = E.pantallaDibujada;
-  const v = { vincular: vVincular, 'vincular-tec': vVincularTec, login: vLogin, inicio: vInicio, escanear: vEscanear, buscar: vBuscar, control: vControl, ot: vOt }[E.pantalla];
+  const v = { vincular: vVincular, 'vincular-tec': vVincularTec, login: vLogin, inicio: vInicio, superv: vSuperv, escanear: vEscanear, buscar: vBuscar, control: vControl, ot: vOt }[E.pantalla];
   if (!v){ app.innerHTML = '<main><p class="o">Cargando…</p></main>'; return; }
   // No redibujar mientras se escribe en un campo de texto (se perdería el foco)
   const foco = document.activeElement && document.activeElement.id;
@@ -900,6 +930,9 @@ document.addEventListener('click', async ev => {
   if (a === 'inicio'){ E.pantalla = 'inicio'; E.ot = null; E.msg = ''; dibujar(); return; }
   if (a === 'escanear'){ E.pantalla = 'escanear'; E.msg = ''; dibujar(); return; }
   if (a === 'buscar'){ E.pantalla = 'buscar'; E.soloSust = false; E.msg = ''; dibujar(); return; }
+  if (esEncargado() && ['escanear', 'buscar', 'elegir', 'ver-sust'].includes(a)) return; // solo consulta
+  if (a === 'sup-tipo'){ E.supTipo = t.dataset.t; dibujar(); return; }
+  if (a === 'sup-fil'){ E.supFil = t.dataset.f; dibujar(); return; }
   if (a === 'ver-sust'){ E.pantalla = 'buscar'; E.tipo = equiposDe('HID').some(esSust) ? 'HID' : 'HIN'; E.q = ''; E.soloSust = true; E.msg = ''; dibujar(); return; }
   if (a === 'solo-sust'){ E.soloSust = !E.soloSust; dibujar(); return; }
   if (a === 'manga'){ E.control.manga = { accion: t.dataset.v, ident: '', vto: '' }; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
