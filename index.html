@@ -142,6 +142,13 @@ const MENSUAL = { HIN: true };
 const esNicho = e => e && (e.tipo === 'HID' || e.tipo === 'HIN');
 const quincena = (iso, tipo) => iso.slice(0, 7) + '-' + (MENSUAL[tipo] ? 'M' : Number(iso.slice(8, 10)) <= 15 ? 1 : 2);
 const ronda = (tipo, ed, iso) => 'PV-' + tipo + '-' + ed + '-' + quincena(iso, tipo);
+// Recorridas en secuencia (hidrantes → extintores → …): una abierta por edificio; los nichos interiores los habilita mantenimiento
+const rondaInfo = tipo => (E.cat && E.cat.rondas) ? (E.cat.rondas[tipo] || { id: '', estado: 'sin habilitar' }) : { id: ronda(tipo, E.tablet.ed, hoyIso()), estado: 'abierta' };
+const rondaId = tipo => rondaInfo(tipo).id;
+const rondaAbierta = tipo => rondaInfo(tipo).estado === 'abierta';
+const diasAbierta = tipo => { const i = rondaInfo(tipo).inicio; return i ? Math.max(0, -diasHasta(String(i).slice(0, 10))) : null; };
+const rondaBloqueoTxt = tipo => { const r = rondaInfo(tipo), n = E.cat.tipos || {};
+  return r.estado === 'bloqueada' ? 'Se habilita cuando terminen ' + (n[r.espera] || 'la otra recorrida').toLowerCase() + '.' : 'Todavía no está habilitada: la habilita mantenimiento cuando el proveedor da la fecha.'; };
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const nombreQ = (iso, tipo) => (MENSUAL[tipo] ? 'mes de' : (Number(iso.slice(8, 10)) <= 15 ? '1ª' : '2ª') + ' quincena') + ' ' + MESES[Number(iso.slice(5, 7)) - 1];
 const diasHasta = iso => iso ? Math.round((new Date(iso + 'T00:00:00') - new Date(hoyIso() + 'T00:00:00')) / 86400000) : null;
@@ -160,7 +167,7 @@ async function enviar(cuerpo){
 }
 const conClave = c => Object.assign({ tablet: E.tablet.id, clave: E.tablet.clave }, c);
 async function guardarCatalogo(j){
-  E.cat = { ahora: j.ahora, equipos: j.equipos, rutinas: j.rutinas, tipos: j.tipos, motivos: j.motivos || {}, hechos: j.hechos || {}, por: j.por || {}, abiertas: j.abiertas || {}, bomberos: j.bomberos, bajado: ahoraIso(),
+  E.cat = { ahora: j.ahora, equipos: j.equipos, rutinas: j.rutinas, tipos: j.tipos, motivos: j.motivos || {}, hechos: j.hechos || {}, por: j.por || {}, abiertas: j.abiertas || {}, rondas: j.rondas || null, bomberos: j.bomberos, bajado: ahoraIso(),
     modo: j.modo || '', termo: j.termo || null, deposito: j.deposito || '' };
   (E.cola || []).forEach(r => depLocal(r)); // lo del depósito que todavía no se envió
   (E.cola || []).filter(r => r.manga).forEach(r => { const eq = (E.cat.equipos || []).find(e => esNicho(e) && e.pos === r.pos); if (eq) mangaLocal(eq, r.manga, r.ts); });
@@ -273,16 +280,16 @@ setInterval(() => { if (E.sesion && Date.now() - E.ultimoUso > (esTec() ? MIN_IN
 
 /* ---------- avance (servidor + lo que todavía está en la tablet) ---------- */
 function hechosDe(tipo){
-  const id = ronda(tipo, E.tablet.ed, hoyIso()), h = Object.assign({}, (E.cat.hechos || {})[id] || {});
-  E.cola.forEach(r => { if (!r.manga && !r.deposito && r.tipo === tipo && ronda(tipo, E.tablet.ed, r.ts.slice(0, 10)) === id) h[r.pos] = r.ts; });
+  const id = rondaId(tipo), h = Object.assign({}, (E.cat.hechos || {})[id] || {});
+  if (id) E.cola.forEach(r => { if (!r.manga && !r.deposito && r.tipo === tipo) h[r.pos] = r.ts; }); // lo que todavía no se envió va a la abierta
   return h;
 }
 const equiposDe = tipo => (E.cat.equipos || []).filter(e => e.tipo === tipo);
 const esEncargado = () => !!(E.sesion && (E.sesion.rol === 'encargado' || ((E.cat.bomberos || []).find(b => b.id === E.sesion.id) || {}).rol === 'encargado'));
 // Quién controló cada equipo en el período (lo del servidor + lo de esta tablet que todavía no se envió)
 function porDe(tipo){
-  const id = ronda(tipo, E.tablet.ed, hoyIso()), p = Object.assign({}, (E.cat.por || {})[id] || {});
-  E.cola.forEach(r => { if (!r.manga && !r.deposito && r.tipo === tipo && ronda(tipo, E.tablet.ed, r.ts.slice(0, 10)) === id) p[r.pos] = ((E.cat.bomberos || []).find(b => b.id === r.bombero) || {}).nombre || 'esta tablet'; });
+  const id = rondaId(tipo), p = Object.assign({}, (E.cat.por || {})[id] || {});
+  if (id) E.cola.forEach(r => { if (!r.manga && !r.deposito && r.tipo === tipo) p[r.pos] = ((E.cat.bomberos || []).find(b => b.id === r.bombero) || {}).nombre || 'esta tablet'; });
   return p;
 }
 // Encargado de seguridad SIN SEÑAL: lo que tiene esta tablet (avance, controles por bombero y quién controló cada equipo)
@@ -296,8 +303,8 @@ function vSupervLocal(){
     .sort((a, b) => String(a.piso).localeCompare(String(b.piso), 'es', { numeric: true }) || a.pos.localeCompare(b.pos, 'es', { numeric: true }));
   return barra('Supervisión · ' + E.sesion.nombre, esc(E.tablet.nombre) + ' · ' + esc(E.tablet.ed) + ' · sin conexión, solo esta tablet', '<button data-a="sv-recargar">Reintentar</button> <button data-a="salir">Salir</button>') + `<main>${aviso()}
   <div class="seg">${tipos.map(t => `<button data-a="sup-tipo" data-t="${t}" aria-pressed="${t === tipo}">${esc(E.cat.tipos[t])}</button>`).join('')}</div>
-  <div class="card"><div class="t">${esc(E.cat.tipos[tipo])} · ${nombreQ(hoyIso(), tipo)}</div>
-    <div class="m">OT ${esc(ronda(tipo, E.tablet.ed, hoyIso()))}</div>
+  <div class="card"><div class="t">${esc(E.cat.tipos[tipo])}${rondaAbierta(tipo) ? '' : ' · en espera'}</div>
+    <div class="m">OT ${esc(rondaId(tipo) || '–')}</div>
     <div class="prog"><i style="width:${eqs.length ? Math.round(hechos / eqs.length * 100) : 0}%"></i></div>
     <div class="m" style="margin-top:5px"><b>${hechos} de ${eqs.length}</b> controlados${hechos >= eqs.length ? ' <span class="pill p-ok">Completa</span>' : ` · faltan ${eqs.length - hechos}`}</div></div>
   <div class="card"><div class="t" style="font-size:16px">Controles por bombero</div>
@@ -335,18 +342,22 @@ function vSuperv(){
   let cuerpo = '';
   if (sv.vista === 'avance'){
     const tipo = tipos.includes(sv.avTipo) ? sv.avTipo : tipos[0], fil = sv.avFil || 'faltan';
-    const eqs = d.equipos.filter(e => e.tipo === tipo && !e.fuera), id = d.rondas[tipo], h = {};
+    const eqs = d.equipos.filter(e => e.tipo === tipo && !e.fuera), id = d.rondas[tipo], h = {}, est = (d.estados || {})[tipo] || {};
     (d.actuales || d.regs).filter(r => r.tipo === tipo && r.ronda === id).forEach(r => { if (!h[r.pos]) h[r.pos] = r; }); // vienen del más nuevo al más viejo
     const hechos = eqs.filter(e => h[e.pos]).length, cuenta = {};
     eqs.forEach(e => { const r = h[e.pos]; if (r) cuenta[r.bombero || 'sin nombre'] = (cuenta[r.bombero || 'sin nombre'] || 0) + 1; });
     const L = eqs.filter(e => fil === 'todos' || (fil === 'hechos' ? h[e.pos] : !h[e.pos]))
       .sort((a, b) => String(a.piso).localeCompare(String(b.piso), 'es', { numeric: true }) || a.pos.localeCompare(b.pos, 'es', { numeric: true }));
     cuerpo = `<div class="seg">${tipos.map(t => `<button data-a="sv-avtipo" data-t="${t}" aria-pressed="${t === tipo}">${esc(d.tipos[t])}</button>`).join('')}</div>
-    <div class="card"><div class="t">${esc(d.tipos[tipo])} · ${nombreQ(d.hoy, tipo)}</div><div class="m">OT ${esc(id)}</div>
+    ${est.estado && est.estado !== 'abierta' ? `<div class="card" style="background:#f4f6f5"><div class="t">${esc(d.tipos[tipo])} <span class="pill p-i">En espera</span></div><div class="m">${est.estado === 'bloqueada' ? 'Se habilita cuando terminen ' + esc(String(d.tipos[est.espera] || '').toLowerCase()) + '.' : 'Sin habilitar: la habilita mantenimiento.'}</div></div>` : ''}
+    <div class="card"><div class="t">${esc(d.tipos[tipo])} ${est.estado === 'abierta' ? '<span class="pill p-ok">En curso</span>' : ''}</div><div class="m">OT ${esc(id || '–')}${est.inicio ? ' · desde el ' + fmtD(est.inicio) + ' (hace ' + Math.max(0, -diasHasta(String(est.inicio).slice(0, 10))) + ' días)' : ''}</div>
       <div class="prog"><i style="width:${eqs.length ? Math.round(hechos / eqs.length * 100) : 0}%"></i></div>
       <div class="m" style="margin-top:5px"><b>${hechos} de ${eqs.length}</b> controlados${hechos >= eqs.length ? ' <span class="pill p-ok">Completa</span>' : ` · faltan ${eqs.length - hechos}`}</div></div>
     <div class="card"><div class="t" style="font-size:16px">Controles por bombero</div>
       ${Object.keys(cuenta).length ? Object.entries(cuenta).sort((a, b) => b[1] - a[1]).map(([n, c]) => `<div class="sup-b"><span>${esc(n)}</span><b>${c}</b></div>`).join('') : '<p class="o" style="margin:6px 0 0">Todavía nadie controló en este período.</p>'}</div>
+    ${(d.cerradas || []).length ? `<div class="card"><div class="t" style="font-size:16px">Últimas recorridas cerradas</div>${d.cerradas.map(c => `<div class="sup-b" style="display:block">
+      <div style="display:flex;justify-content:space-between;gap:8px"><span>${esc(d.tipos[c.tipo] || c.tipo)} · ${fmtD(c.inicio)} al ${fmtD(c.cierre)}</span><span class="pill ${c.estado === 'incompleta' ? 'p-b' : 'p-ok'}">${c.estado === 'incompleta' ? 'Incompleta' : 'Completa'}</span></div>
+      ${c.estado === 'incompleta' ? `<div class="m">Entregó ${esc(c.por)}${c.tablet ? ' (' + esc(c.tablet) + ')' : ''}: ${esc(c.motivo)}${c.faltan ? '<br>Faltaron: ' + esc(c.faltan) : ''}</div>` : ''}</div>`).join('')}</div>` : ''}
     <div class="seg">${[['faltan', 'Faltan (' + (eqs.length - hechos) + ')'], ['hechos', 'Hechos (' + hechos + ')'], ['todos', 'Todos']].map(([k, n]) => `<button data-a="sv-avfil" data-f="${k}" aria-pressed="${k === fil}">${n}</button>`).join('')}</div>
     <div class="lista">${L.map(e => { const r = h[e.pos];
       return `<button class="row" ${r ? `data-a="sv-abrir" data-u="${esc(r.uid)}"` : 'style="cursor:default"'}><span><span class="mono">${esc(e.pos)}</span><br><span class="m">${esc(e.piso)} · ${esc(e.ubic)}</span></span>
@@ -443,11 +454,44 @@ function vDeposito(){
   <button class="big" data-a="dep-ok">GUARDAR EXTINTOR EN EL DEPÓSITO</button></main>`;
 }
 
+/* ---------- entregar la recorrida incompleta (el bombero, con el motivo) ---------- */
+function vEntregar(){
+  const tipo = E.entTipo, h = hechosDe(tipo), falta = equiposDe(tipo).filter(e => !depFuera(e) && !h[e.pos])
+    .sort((a, b) => String(a.piso).localeCompare(String(b.piso), 'es', { numeric: true }) || a.pos.localeCompare(b.pos, 'es', { numeric: true }));
+  const pend = E.cola.filter(r => r.tipo === tipo && !r.manga && !r.deposito).length;
+  if (!falta.length) return barra('Entregar recorrida', esc(E.cat.tipos[tipo]) + ' · ' + esc(rondaId(tipo)), '<button data-a="inicio">Volver</button>') + `<main>
+  <div class="card"><div class="t" style="font-size:16px">Están todos los equipos controlados</div><div class="m">Al entregarla se habilita la recorrida siguiente.</div></div>${aviso()}
+  <div style="flex:1"></div><button class="btn" data-a="inicio">Volver</button><button class="big" data-a="entregar-ok" ${E.online ? '' : 'disabled'}>ENTREGAR RECORRIDA</button></main>`;
+  return barra('Entregar incompleta', esc(E.cat.tipos[tipo]) + ' · ' + esc(rondaId(tipo)), '<button data-a="inicio">Volver</button>') + `<main>
+  <div class="card"><div class="t" style="font-size:16px">Faltan ${falta.length} equipo${falta.length === 1 ? '' : 's'}</div>
+    <div class="m" style="max-height:220px;overflow:auto;margin-top:6px">${falta.map(e => `<div><span class="mono">${esc(e.pos)}</span> · ${esc(e.piso)} · ${esc(e.ubic)}</div>`).join('')}</div></div>
+  <label class="f">¿Por qué se entrega incompleta? (obligatorio)<textarea id="ent-motivo" rows="3" placeholder="Ej.: oficina 12 cerrada, sin acceso">${esc(E.entMotivo || '')}</textarea></label>
+  <p class="o">Queda registrado con tu nombre, la fecha y lo que faltó. Después se habilita la recorrida siguiente.${pend ? ' Antes se envían los ' + pend + ' controles que están en la tablet.' : ''}</p>
+  ${aviso()}
+  <div style="flex:1"></div>
+  <button class="btn" data-a="inicio">Volver (no entregar)</button>
+  <button class="big" data-a="entregar-ok" ${String(E.entMotivo || '').trim().length < 3 || !E.online ? 'disabled' : ''}>SÍ, ENTREGAR INCOMPLETA</button>
+  ${E.online ? '' : '<p class="o">Hace falta señal para entregarla.</p>'}</main>`;
+}
+async function entregarRonda(){
+  const tipo = E.entTipo, motivo = String(E.entMotivo || '').trim(), hh = hechosDe(tipo);
+  if (motivo.length < 3 && equiposDe(tipo).some(e => !depFuera(e) && !hh[e.pos])){ E.msg = 'Escribí el motivo.'; dibujar(); return; }
+  E.msg = ''; toast('Enviando…');
+  try {
+    await sincronizar(true); E.cola = await DB.cola();
+    if (E.cola.some(r => r.tipo === tipo && !r.manga && !r.deposito)) throw new Error('Todavía hay controles sin enviar: probá de nuevo en un momento.');
+    const j = await enviar(conClave({ op: 'cerrar_ronda', tipo, bombero: E.sesion.id, motivo }));
+    await guardarCatalogo(j); E.entMotivo = ''; E.pantalla = 'inicio';
+    toast(E.cat.tipos[tipo] + ': entregada' + (j.faltaron ? ' (faltaron ' + j.faltaron + ')' : '') + '.'); dibujar();
+  } catch(e){ E.msg = e.message || String(e); dibujar(); }
+}
+
 /* ---------- control de un equipo ---------- */
 function abrirControl(pos, tipo){
   const eq = (E.cat.equipos || []).find(e => e.pos.toUpperCase() === pos.toUpperCase() && (!tipo || e.tipo === tipo))
     || (E.cat.equipos || []).find(e => e.ident && e.ident === pos); // por si escanean una etiqueta vieja con el ID
   if (!eq){ E.msg = 'No encontré el equipo "' + pos + '". Probá con "Buscar sin QR".'; E.pantalla = 'inicio'; dibujar(); return; }
+  if (!rondaAbierta(eq.tipo)){ E.msg = (E.cat.tipos[eq.tipo] || eq.tipo) + ': ' + rondaBloqueoTxt(eq.tipo); E.pantalla = 'inicio'; dibujar(); return; }
   E.control = { eq, resp: {}, obs: '', foto: '', cambio: null, editar: false, reemplazo: false };
   E.pantalla = 'control'; E.msg = ''; dibujar();
 }
@@ -568,10 +612,14 @@ function vInicio(){
     const tot = equiposDe(tipo).filter(e => !depFuera(e)).length, h = Object.keys(hechosDe(tipo)).length;
     if (!tot) return '';
     const conObs = E.cola.filter(r => r.tipo === tipo && Object.values(r.resp || {}).includes('NO')).length;
-    return `<div class="card"><div class="t">${esc(E.cat.tipos[tipo])}${MENSUAL[tipo] ? '' : ' · ' + nombreQ(hoyIso(), tipo)}</div>
-      <div class="m">OT ${esc(ronda(tipo, E.tablet.ed, hoyIso()))} · ${tot} equipos</div>
+    if (!rondaAbierta(tipo)) return `<div class="card" style="opacity:.75;background:#f4f6f5"><div class="t">${esc(E.cat.tipos[tipo])} <span class="pill p-i">En espera</span></div>
+      <div class="m">${esc(rondaBloqueoTxt(tipo))}</div></div>`;
+    const dA = diasAbierta(tipo);
+    return `<div class="card"><div class="t">${esc(E.cat.tipos[tipo])} <span class="pill p-ok">En curso</span></div>
+      <div class="m">OT ${esc(rondaId(tipo))} · ${tot} equipos${dA != null ? ' · abierta hace ' + dA + (dA === 1 ? ' día' : ' días') : ''}</div>
       <div class="prog"><i style="width:${Math.round(h / tot * 100)}%"></i></div>
-      <div class="m" style="margin-top:5px"><b>${h} de ${tot}</b>${h >= tot ? ' <span class="pill p-ok">Completa</span>' : ''}${conObs ? ` · <span class="pill p-w">${conObs} con observación sin enviar</span>` : ''}</div></div>`;
+      <div class="m" style="margin-top:5px"><b>${h} de ${tot}</b>${h >= tot ? ' <span class="pill p-ok">Completa</span>' : ''}${conObs ? ` · <span class="pill p-w">${conObs} con observación sin enviar</span>` : ''}</div>
+      ${E.cat.rondas ? `<button class="btn" data-a="entregar" data-t="${tipo}" style="margin-top:8px;width:100%">${h < tot ? 'Entregar incompleta…' : 'Entregar recorrida'}</button>` : ''}</div>`;
   }).join('');
   const nSust = equiposDe('HID').concat(equiposDe('HIN')).filter(esSust).length;
   const depT = equiposDe('EXT').filter(esDep), depOk = depT.filter(e => !depFuera(e) && e.ident && !vencidoExt(e)).length, depVac = depT.filter(depVacia).length, depRec = depT.filter(depRecargar).length;
@@ -941,7 +989,7 @@ async function guardarEquipo(){
 
 function dibujar(){
   const app = document.getElementById('app'), antes = E.pantallaDibujada;
-  const v = { vincular: vVincular, 'vincular-tec': vVincularTec, login: vLogin, inicio: vInicio, superv: vSuperv, escanear: vEscanear, buscar: vBuscar, control: vControl, ot: vOt }[E.pantalla];
+  const v = { vincular: vVincular, 'vincular-tec': vVincularTec, login: vLogin, inicio: vInicio, superv: vSuperv, entregar: vEntregar, escanear: vEscanear, buscar: vBuscar, control: vControl, ot: vOt }[E.pantalla];
   if (!v){ app.innerHTML = '<main><p class="o">Cargando…</p></main>'; return; }
   // No redibujar mientras se escribe en un campo de texto (se perdería el foco)
   const foco = document.activeElement && document.activeElement.id;
@@ -1024,6 +1072,8 @@ document.addEventListener('click', async ev => {
   if (a === 'buscar'){ E.pantalla = 'buscar'; E.soloSust = false; E.msg = ''; dibujar(); return; }
   if (esEncargado() && ['escanear', 'buscar', 'elegir', 'ver-sust'].includes(a)) return; // solo consulta
   if (a === 'sup-tipo'){ E.supTipo = t.dataset.t; dibujar(); return; }
+  if (a === 'entregar'){ E.entTipo = t.dataset.t; E.entMotivo = ''; E.msg = ''; E.pantalla = 'entregar'; dibujar(); window.scrollTo(0, 0); return; }
+  if (a === 'entregar-ok'){ entregarRonda(); return; }
   if (a === 'sv-recargar'){ if (E.sv) E.sv.local = false; cargarSuperv(); return; }
   if (a === 'sv-local'){ E.sv.local = true; dibujar(); return; }
   if (a === 'sv-ed'){ E.sv.ed = t.dataset.ed; E.sv.abierto = ''; E.sv.tablet = ''; E.sv.bomb = ''; cargarSuperv(); return; }
@@ -1062,6 +1112,7 @@ document.addEventListener('input', ev => {
   if (el.dataset.tk){ const r = borrador(E.ot.id).resp; r[el.dataset.tk] = Object.assign(r[el.dataset.tk] || {}, { [el.dataset.f]: el.value }); guardarBorrador(); actualizarProgresoOt(); return; }
   if (el.id === 'ot-obs'){ borrador(E.ot.id).obs = el.value; guardarBorrador(); return; }
   if (el.id === 'eq-obs'){ const b = borrador(E.ot.id); (b.obsEq = b.obsEq || {})[E.ot.parte + '|' + E.ot.eq] = el.value; guardarBorrador(); return; }
+  if (el.id === 'ent-motivo'){ E.entMotivo = el.value; const b = document.querySelector('[data-a="entregar-ok"]'); if (b) b.disabled = el.value.trim().length < 3 || !E.online; return; }
   if (el.id === 'c-obs') E.control.obs = el.value;
   else if (el.dataset.cambio) E.control.cambio[el.dataset.cambio] = el.value;
   else if (el.dataset.manga) E.control.manga[el.dataset.manga] = el.value;
