@@ -281,7 +281,7 @@ setInterval(() => { if (E.sesion && Date.now() - E.ultimoUso > (esTec() ? MIN_IN
 /* ---------- avance (servidor + lo que todavía está en la tablet) ---------- */
 function hechosDe(tipo){
   const id = rondaId(tipo), h = Object.assign({}, (E.cat.hechos || {})[id] || {});
-  if (id) E.cola.forEach(r => { if (!r.manga && !r.deposito && r.tipo === tipo) h[r.pos] = r.ts; }); // lo que todavía no se envió va a la abierta
+  if (id) E.cola.forEach(r => { if (!r.manga && !r.deposito && !r.fuera && r.tipo === tipo) h[r.pos] = r.ts; }); // lo que todavía no se envió va a la abierta
   return h;
 }
 const equiposDe = tipo => (E.cat.equipos || []).filter(e => e.tipo === tipo);
@@ -491,8 +491,9 @@ function abrirControl(pos, tipo){
   const eq = (E.cat.equipos || []).find(e => e.pos.toUpperCase() === pos.toUpperCase() && (!tipo || e.tipo === tipo))
     || (E.cat.equipos || []).find(e => e.ident && e.ident === pos); // por si escanean una etiqueta vieja con el ID
   if (!eq){ E.msg = 'No encontré el equipo "' + pos + '". Probá con "Buscar sin QR".'; E.pantalla = 'inicio'; dibujar(); return; }
-  if (!rondaAbierta(eq.tipo)){ E.msg = (E.cat.tipos[eq.tipo] || eq.tipo) + ': ' + rondaBloqueoTxt(eq.tipo); E.pantalla = 'inicio'; dibujar(); return; }
-  E.control = { eq, resp: {}, obs: '', foto: '', cambio: null, editar: false, reemplazo: false };
+  // Recorrida en espera: igual se puede abrir el equipo para reemplazarlo (vencido, despresurizado…) o cambiar la manga;
+  // ese control no cuenta para ninguna recorrida
+  E.control = { eq, resp: {}, obs: '', foto: '', cambio: null, editar: false, reemplazo: false, fuera: !rondaAbierta(eq.tipo) };
   E.pantalla = 'control'; E.msg = ''; dibujar();
 }
 async function guardarControl(){
@@ -507,7 +508,7 @@ async function guardarControl(){
   }
   if (c.cambio && c.reemplazo) c.cambio.retirado = Object.fromEntries(DATOS_EXT.map(k => [k, c.eq[k] || '']));
   const r = { uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: c.eq.tipo, pos: c.eq.pos,
-    bombero: E.sesion.id, resp: c.vacio ? {} : c.resp, obs: c.obs.trim(), foto: c.foto, cambio: c.vacio ? null : c.cambio || null, vacio: !!c.vacio };
+    bombero: E.sesion.id, resp: c.vacio ? {} : c.resp, obs: c.obs.trim(), foto: c.foto, cambio: c.vacio ? null : c.cambio || null, vacio: !!c.vacio, fuera: !!c.fuera };
   await DB.encolar(r);
   // El cambio de equipo se ve enseguida en la tablet, aunque no haya señal
   if (r.cambio){ depLocal(r); Object.assign(c.eq, Object.fromEntries(Object.entries(r.cambio).filter(([k, v]) => k !== 'reemplazo' && k !== 'motivo' && k !== 'desde' && k !== 'retirado' && v))); }
@@ -694,7 +695,8 @@ function vControl(){
   const camposCambio = EXT
     ? [['ident', c.reemplazo ? 'ID del extintor NUEVO' : 'ID del extintor'], ...(c.reemplazo ? [['clase', 'Tipo (ABC, CO2…)'], ['peso', 'Peso (ej.: 5kg)'], ['vtoCarga', 'Vence la carga', 'date'], ['vtoPH', 'Vence la prueba hidráulica', 'date'], ['vtoExt', 'Vence el extintor', 'date']] : [])]
     : [['ident', c.reemplazo ? 'Código de la manga NUEVA' : 'Código de manga'], ...(c.reemplazo ? [['vtoManga', 'Vence la manga', 'date']] : [])];
-  const cabeza = barra((EXT ? 'Extintor ' : 'Nicho ') + e.pos, esc(e.piso) + ' · ' + esc(e.ubic), '<button data-a="cancelar">Cancelar</button>');
+  const cabeza = barra((EXT ? 'Extintor ' : 'Nicho ') + e.pos, esc(e.piso) + ' · ' + esc(e.ubic), '<button data-a="cancelar">Cancelar</button>')
+    + (c.fuera ? `<div class="aviso" style="margin:8px 12px 0;background:var(--info-soft);color:var(--info);border-radius:10px;padding:10px 12px">La recorrida de ${esc(String(E.cat.tipos[e.tipo] || '').toLowerCase())} está en espera: usalo solo para <b>reemplazar el equipo</b> (vencido, despresurizado…) o <b>cambiar la manga</b>. No cuenta para la recorrida.</div>` : '');
   const foto = `<label class="btn" style="display:flex;align-items:center;justify-content:center;gap:8px">📷 ${c.foto ? 'Cambiar foto' : 'Sacar foto (opcional)'}<input type="file" accept="image/*" capture="environment" id="c-foto" hidden></label>
     ${c.foto ? `<img class="foto" src="${c.foto}" alt="Foto">` : ''}`;
   // Posición vacía: se lo llevaron y no hay reserva. Una sola línea para el supervisor, sin las preguntas.
