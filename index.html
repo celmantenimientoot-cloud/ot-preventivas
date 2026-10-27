@@ -68,6 +68,11 @@ button.card{font:inherit;color:inherit}
 .plano .pt{position:absolute;transform:translate(-50%,-50%);min-width:30px;height:30px;border-radius:15px;border:2px solid #c0392b;background:rgba(255,255,255,.88);font:700 11px system-ui,sans-serif;padding:0 3px;color:#c0392b;line-height:26px}
 .plano .pt.ok{background:#15803d;border-color:#15803d;color:#fff;font-size:15px}.plano .pt.mal{background:#c0392b;color:#fff;font-size:14px}
 .carpeta{text-align:left;width:100%;cursor:pointer;padding:16px}.carpeta .t{font-size:22px}.carpeta .ico{font-size:26px}.carpeta .m{font-size:15px;margin-top:4px}
+.sv-fil{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}.sv-fil label{display:flex;flex-direction:column;font-size:12px;font-weight:700;color:var(--muted);gap:3px}
+.sv-fil select,.sv-fil input{min-height:40px;border:1px solid var(--line);border-radius:8px;padding:0 8px;font:15px system-ui,sans-serif;background:#fff}.sv-fil .ancho{grid-column:1/-1}
+.sv-det{padding:8px 12px 12px;margin:0 0 6px;background:#f6f9f8;border-radius:0 0 10px 10px;border-bottom:1px solid #eef2f0;font-size:14px}
+.sv-p{padding:3px 0}.sv-p.si{color:var(--ok)}.sv-p.no{color:var(--bad-ink);font-weight:700}
+main{max-width:900px;margin-left:auto;margin-right:auto} /* en la PC no se estira de punta a punta */
 .sup-b{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eef2f0;font-size:15px}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
 .plano .pt,.pt-pop button,.pf-barra button{touch-action:manipulation} /* sin el zoom del doble toque: el plano no se corre solo */
@@ -260,6 +265,7 @@ function iniciarSesion(b){
   sessionStorage.setItem('sesion', JSON.stringify(E.sesion));
   E.pin = ''; E.msg = ''; E.pantalla = b.rol === 'encargado' ? 'superv' : 'inicio'; E.ultimoUso = Date.now(); // el encargado solo mira: va directo a la supervisión
   dibujar(); bajar().then(dibujar);
+  if (E.pantalla === 'superv') cargarSuperv();
 }
 function salir(){ E.sesion = null; sessionStorage.removeItem('sesion'); pararCamara(); E.pantalla = 'login'; E.control = null; dibujar(); }
 setInterval(() => { if (E.sesion && Date.now() - E.ultimoUso > (esTec() ? MIN_INACTIVO_TEC : MIN_INACTIVO) * 60000){ salir(); toast('Sesión cerrada por inactividad'); } }, 30000);
@@ -279,8 +285,8 @@ function porDe(tipo){
   E.cola.forEach(r => { if (!r.manga && !r.deposito && r.tipo === tipo && ronda(tipo, E.tablet.ed, r.ts.slice(0, 10)) === id) p[r.pos] = ((E.cat.bomberos || []).find(b => b.id === r.bombero) || {}).nombre || 'esta tablet'; });
   return p;
 }
-// Encargado de seguridad: avance de cada recorrida, cuántos controles hizo cada bombero y quién controló cada equipo
-function vSuperv(){
+// Encargado de seguridad SIN SEÑAL: lo que tiene esta tablet (avance, controles por bombero y quién controló cada equipo)
+function vSupervLocal(){
   const tipos = Object.keys(E.cat.tipos || {}).filter(t => equiposDe(t).some(e => !depFuera(e)));
   const tipo = tipos.includes(E.supTipo) ? E.supTipo : tipos[0], fil = E.supFil || 'faltan';
   if (!tipo) return barra('Supervisión', esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + '<main><p class="o">Esta tablet todavía no tiene equipos.</p></main>';
@@ -288,7 +294,7 @@ function vSuperv(){
   const cuenta = {}; eqs.forEach(e => { if (h[e.pos]) cuenta[p[e.pos] || 'sin nombre'] = (cuenta[p[e.pos] || 'sin nombre'] || 0) + 1; });
   const L = eqs.filter(e => fil === 'todos' || (fil === 'hechos' ? h[e.pos] : !h[e.pos]))
     .sort((a, b) => String(a.piso).localeCompare(String(b.piso), 'es', { numeric: true }) || a.pos.localeCompare(b.pos, 'es', { numeric: true }));
-  return barra('Supervisión · ' + E.sesion.nombre, esc(E.tablet.nombre) + ' · ' + esc(E.tablet.ed) + ' · solo consulta', '<button data-a="salir">Salir</button>') + `<main>${aviso()}
+  return barra('Supervisión · ' + E.sesion.nombre, esc(E.tablet.nombre) + ' · ' + esc(E.tablet.ed) + ' · sin conexión, solo esta tablet', '<button data-a="sv-recargar">Reintentar</button> <button data-a="salir">Salir</button>') + `<main>${aviso()}
   <div class="seg">${tipos.map(t => `<button data-a="sup-tipo" data-t="${t}" aria-pressed="${t === tipo}">${esc(E.cat.tipos[t])}</button>`).join('')}</div>
   <div class="card"><div class="t">${esc(E.cat.tipos[tipo])} · ${nombreQ(hoyIso(), tipo)}</div>
     <div class="m">OT ${esc(ronda(tipo, E.tablet.ed, hoyIso()))}</div>
@@ -300,6 +306,92 @@ function vSuperv(){
   <div class="lista">${L.map(e => `<div class="row" style="cursor:default"><span><span class="mono">${esc(e.pos)}</span><br><span class="m">${esc(e.piso)} · ${esc(e.ubic)}</span></span>
     <span style="text-align:right">${h[e.pos] ? `<span class="pill p-ok">${esc(p[e.pos] || 'Hecho')}</span><br><span class="m">${fmtD(h[e.pos])} ${esc(String(h[e.pos]).slice(11, 16))}</span>` : '<span class="pill p-w">Falta</span>'}</span></div>`).join('') || '<p class="o">No hay equipos en esta lista.</p>'}</div></main>`;
 }
+/* ---------- encargado de seguridad: lo de todas las tablets, con el detalle de cada control y los vencimientos ----------
+   Se pide al servidor al entrar (op "superv"); sin señal se ve lo de esta tablet (vSupervLocal). Solo consulta. */
+async function cargarSuperv(){
+  const sv = E.sv = E.sv || { vista: 'avance', dias: 31, obs: 'todos', tipo: '', tablet: '', bomb: '', q: '' };
+  sv.cargando = true; if (E.pantalla === 'superv') dibujar();
+  const cal = sv.dias === 'cal' && sv.desde;
+  try { sv.datos = await enviar(conClave({ op: 'superv', enc: E.sesion.id, ed: sv.ed || '', dias: cal ? 0 : sv.dias, desde: cal ? sv.desde : '', hasta: cal ? (sv.hasta || '') : '' })); sv.ed = sv.datos.ed; sv.err = ''; sv.local = false; }
+  catch(e){ sv.err = e.message; }
+  sv.cargando = false; if (E.pantalla === 'superv') dibujar();
+}
+const svConObs = r => !!(String(r.obs || '').trim() || Object.values(r.resp || {}).includes('NO') || (r.resp || {}).vacio || (r.estado && r.estado !== 'OK'));
+const svHora = ts => fmtD(ts) + ' ' + String(ts || '').slice(11, 16);
+function vSuperv(){
+  const sv = E.sv = E.sv || { vista: 'avance', dias: 31, obs: 'todos', tipo: '', tablet: '', bomb: '', q: '' }, d = sv.datos;
+  if (sv.local || (!d && sv.err)) {
+    if (sv.local) return vSupervLocal();
+    return barra('Supervisión · ' + E.sesion.nombre, 'solo consulta', '<button data-a="salir">Salir</button>') + `<main><div class="card"><div class="t" style="font-size:16px">No se pudo traer la información</div>
+      <p class="o">${esc(sv.err)}</p><div class="grid2"><button class="btn" data-a="sv-recargar">Reintentar</button><button class="btn" data-a="sv-local">Ver lo de esta tablet</button></div></div></main>`;
+  }
+  if (!d && !sv.cargando) setTimeout(cargarSuperv, 0); // al volver a abrir la app con la sesión del encargado
+  if (!d) return barra('Supervisión · ' + E.sesion.nombre, 'solo consulta', '<button data-a="salir">Salir</button>') + '<main><p class="o">Trayendo los controles de todas las tablets…</p></main>';
+  const tipos = Object.keys(d.tipos).filter(t => d.equipos.some(e => e.tipo === t) || d.regs.some(r => r.tipo === t));
+  const nVenc = d.venc.length;
+  const cab = `${d.eds.length > 1 ? `<div class="seg">${d.eds.map(x => `<button data-a="sv-ed" data-ed="${x}" aria-pressed="${x === d.ed}">${x}</button>`).join('')}</div>` : ''}
+    <div class="seg">${[['avance', 'Avance'], ['controles', 'Controles'], ['venc', 'Vencimientos' + (nVenc ? ' (' + nVenc + ')' : '')]].map(([k, n]) => `<button data-a="sv-vista" data-v="${k}" aria-pressed="${k === sv.vista}">${n}</button>`).join('')}</div>
+    ${sv.cargando ? '<p class="o">Actualizando…</p>' : ''}`;
+  let cuerpo = '';
+  if (sv.vista === 'avance'){
+    const tipo = tipos.includes(sv.avTipo) ? sv.avTipo : tipos[0], fil = sv.avFil || 'faltan';
+    const eqs = d.equipos.filter(e => e.tipo === tipo && !e.fuera), id = d.rondas[tipo], h = {};
+    (d.actuales || d.regs).filter(r => r.tipo === tipo && r.ronda === id).forEach(r => { if (!h[r.pos]) h[r.pos] = r; }); // vienen del más nuevo al más viejo
+    const hechos = eqs.filter(e => h[e.pos]).length, cuenta = {};
+    eqs.forEach(e => { const r = h[e.pos]; if (r) cuenta[r.bombero || 'sin nombre'] = (cuenta[r.bombero || 'sin nombre'] || 0) + 1; });
+    const L = eqs.filter(e => fil === 'todos' || (fil === 'hechos' ? h[e.pos] : !h[e.pos]))
+      .sort((a, b) => String(a.piso).localeCompare(String(b.piso), 'es', { numeric: true }) || a.pos.localeCompare(b.pos, 'es', { numeric: true }));
+    cuerpo = `<div class="seg">${tipos.map(t => `<button data-a="sv-avtipo" data-t="${t}" aria-pressed="${t === tipo}">${esc(d.tipos[t])}</button>`).join('')}</div>
+    <div class="card"><div class="t">${esc(d.tipos[tipo])} · ${nombreQ(d.hoy, tipo)}</div><div class="m">OT ${esc(id)}</div>
+      <div class="prog"><i style="width:${eqs.length ? Math.round(hechos / eqs.length * 100) : 0}%"></i></div>
+      <div class="m" style="margin-top:5px"><b>${hechos} de ${eqs.length}</b> controlados${hechos >= eqs.length ? ' <span class="pill p-ok">Completa</span>' : ` · faltan ${eqs.length - hechos}`}</div></div>
+    <div class="card"><div class="t" style="font-size:16px">Controles por bombero</div>
+      ${Object.keys(cuenta).length ? Object.entries(cuenta).sort((a, b) => b[1] - a[1]).map(([n, c]) => `<div class="sup-b"><span>${esc(n)}</span><b>${c}</b></div>`).join('') : '<p class="o" style="margin:6px 0 0">Todavía nadie controló en este período.</p>'}</div>
+    <div class="seg">${[['faltan', 'Faltan (' + (eqs.length - hechos) + ')'], ['hechos', 'Hechos (' + hechos + ')'], ['todos', 'Todos']].map(([k, n]) => `<button data-a="sv-avfil" data-f="${k}" aria-pressed="${k === fil}">${n}</button>`).join('')}</div>
+    <div class="lista">${L.map(e => { const r = h[e.pos];
+      return `<button class="row" ${r ? `data-a="sv-abrir" data-u="${esc(r.uid)}"` : 'style="cursor:default"'}><span><span class="mono">${esc(e.pos)}</span><br><span class="m">${esc(e.piso)} · ${esc(e.ubic)}</span></span>
+      <span style="text-align:right">${r ? `<span class="pill ${svConObs(r) ? 'p-b' : 'p-ok'}">${esc(r.bombero || 'Hecho')}</span><br><span class="m">${svHora(r.ts)}</span>` : '<span class="pill p-w">Falta</span>'}</span></button>${r && sv.abierto === r.uid ? svDetalle(r, d) : ''}`; }).join('') || '<p class="o">No hay equipos en esta lista.</p>'}</div>`;
+  } else if (sv.vista === 'controles'){
+    const tabs = [...new Set(d.regs.map(r => r.tablet).filter(Boolean))].sort(), bombs = [...new Set(d.regs.map(r => r.bombero).filter(Boolean))].sort();
+    const eqDe = {}; d.equipos.forEach(e => { eqDe[e.tipo + '|' + e.pos] = e; });
+    const q = String(sv.q || '').trim().toUpperCase();
+    const L = d.regs.filter(r => (!sv.tipo || r.tipo === sv.tipo) && (!sv.tablet || r.tablet === sv.tablet) && (!sv.bomb || r.bombero === sv.bomb)
+      && (sv.obs === 'todos' || (sv.obs === 'con') === svConObs(r)) && (!q || (r.pos + ' ' + ((eqDe[r.tipo + '|' + r.pos] || {}).piso || '') + ' ' + r.ident).toUpperCase().includes(q)));
+    const con = d.regs.filter(r => (!sv.tipo || r.tipo === sv.tipo) && svConObs(r)).length;
+    cuerpo = `<div class="card sv-fil">
+      <label>Tipo<select id="sv-tipo"><option value="">Todos</option>${tipos.map(t => `<option value="${t}" ${t === sv.tipo ? 'selected' : ''}>${esc(d.tipos[t])}</option>`).join('')}</select></label>
+      <label>Tablet<select id="sv-tablet"><option value="">Todas</option>${tabs.map(t => `<option ${t === sv.tablet ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
+      <label>Bombero<select id="sv-bomb"><option value="">Todos</option>${bombs.map(t => `<option ${t === sv.bomb ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
+      <label>Período<select id="sv-dias">${[[31, 'Último mes'], [62, 'Últimos 2 meses'], [93, 'Últimos 3 meses'], ['cal', 'Elegir fechas…']].map(([n, t]) => `<option value="${n}" ${String(n) === String(sv.dias) ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      ${sv.dias === 'cal' ? `<label>Desde<input type="date" id="sv-desde" value="${esc(sv.desde || '')}" max="${d.hoy}"></label><label>Hasta<input type="date" id="sv-hasta" value="${esc(sv.hasta || d.hoy)}" max="${d.hoy}"></label>` : ''}
+      <label class="ancho">Buscar<input id="sv-q" value="${esc(sv.q || '')}" placeholder="Posición, piso o ID" autocomplete="off"></label></div>
+    <div class="seg">${[['todos', 'Todos (' + d.regs.filter(r => !sv.tipo || r.tipo === sv.tipo).length + ')'], ['con', 'Con observaciones (' + con + ')'], ['sin', 'Sin observaciones']].map(([k, n]) => `<button data-a="sv-obs" data-o="${k}" aria-pressed="${k === sv.obs}">${n}</button>`).join('')}</div>
+    <p class="m" style="margin:2px 2px 0">${L.length} control${L.length === 1 ? '' : 'es'} del ${fmtD(d.desde)} al ${fmtD(d.hasta)} · tocá uno para ver el detalle</p>
+    <div class="lista">${L.slice(0, 400).map(r => { const e = eqDe[r.tipo + '|' + r.pos] || {};
+      return `<button class="row" data-a="sv-abrir" data-u="${esc(r.uid)}"><span><span class="mono">${esc(r.pos)}</span> <span class="m">${esc(d.tipos[r.tipo] || r.tipo)}</span><br><span class="m">${esc(e.piso || '')}${e.ubic ? ' · ' + esc(e.ubic) : ''}</span></span>
+      <span style="text-align:right"><span class="pill ${svConObs(r) ? 'p-b' : 'p-ok'}">${svConObs(r) ? 'Con observación' : 'OK'}</span><br><span class="m">${svHora(r.ts)} · ${esc(r.bombero || '')}</span></span></button>${sv.abierto && sv.abierto === r.uid ? svDetalle(r, d) : ''}`; }).join('') || '<p class="o">No hay controles con estos filtros.</p>'}
+      ${L.length > 400 ? '<p class="o">Se muestran los 400 más nuevos: usá los filtros para ver el resto.</p>' : ''}</div>`;
+  } else {
+    const vt = sv.vtTipo || '', L = d.venc.filter(v => !vt || (vt === 'EXT') === (v.tipo === 'EXT')), // mangas: nichos hidrantes e interiores vencidos = L.filter(v => v.vto < d.hoy).length;
+    cuerpo = `<div class="seg">${[['', 'Todos'], ['EXT', 'Extintores'], ['HID', 'Mangas / nichos']].map(([k, n]) => `<button data-a="sv-vttipo" data-t="${k}" aria-pressed="${k === vt}">${n}</button>`).join('')}</div>
+    <p class="m" style="margin:2px">Lo que ya venció y lo que vence en los próximos 2 meses${vencidos ? ` · <b style="color:var(--bad-ink)">${vencidos} vencido${vencidos === 1 ? '' : 's'}</b>` : ''}.</p>
+    <div class="lista">${L.map(v => { const dd = diasHasta(v.vto);
+      return `<div class="row" style="cursor:default"><span><span class="mono">${esc(v.pos)}</span> <span class="m">${esc(v.que)}${v.dep ? ' · depósito' : ''}</span><br><span class="m">${esc(v.piso || '')}${v.ubic ? ' · ' + esc(v.ubic) : ''}${v.ident ? ' · ' + esc(v.ident) : ''}</span></span>
+      <span style="text-align:right"><span class="pill ${dd < 0 ? 'p-b' : 'p-w'}">${dd < 0 ? 'Venció' : dd === 0 ? 'Vence hoy' : 'En ' + dd + ' días'}</span><br><span class="m">${fmtD(v.vto)}</span></span></div>`; }).join('') || '<p class="o">No vence nada en los próximos 2 meses.</p>'}</div>`;
+  }
+  return barra('Supervisión · ' + E.sesion.nombre, esc(d.ed) + ' · todas las tablets · solo consulta', '<button data-a="sv-recargar">Actualizar</button> <button data-a="salir">Salir</button>') + `<main>${cab}${cuerpo}</main>`;
+}
+// El control completo: cada punto con ✔ o ✖, la observación, la foto, el bombero y la tablet
+function svDetalle(r, d){
+  const ctl = (d.controles || {})[r.tipo] || [], resp = r.resp || {};
+  const puntos = resp.vacio ? '<div class="sv-p no">✖ No había equipo en la posición</div>'
+    : ctl.map(([k, t]) => resp[k] ? `<div class="sv-p ${resp[k] === 'NO' ? 'no' : 'si'}">${resp[k] === 'NO' ? '✖' : '✔'} ${esc(t)}</div>` : '').join('') || '<div class="m">Sin puntos registrados.</div>';
+  return `<div class="sv-det"><div class="m">${svHora(r.ts)} · <b>${esc(r.bombero || '')}</b>${r.tablet ? ' · ' + esc(r.tablet) : ''}${r.ident ? ' · ID ' + esc(r.ident) : ''}</div>
+    ${puntos}${r.estado && r.estado !== 'OK' ? `<div class="m" style="margin-top:6px"><b>Resultado:</b> ${esc(r.estado)}</div>` : ''}
+    ${String(r.obs || '').trim() ? `<div style="margin-top:6px"><b>Observación:</b> ${esc(r.obs)}</div>` : ''}
+    ${r.foto ? `<a class="btn" style="margin-top:8px;display:inline-block" href="${esc(r.foto)}" target="_blank" rel="noopener">Ver la foto</a>` : ''}</div>`;
+}
+
 /* ---------- depósito de reserva de extintores (CEL: posiciones M4SSD) ----------
    Se controlan como cualquier extintor. Al reemplazar un extintor de un piso se elige el del depósito: pasa con sus
    datos al piso y el RETIRADO se guarda en esa posición del depósito, A RECARGAR, hasta que vuelve de DENAPOLI. */
@@ -932,6 +1024,15 @@ document.addEventListener('click', async ev => {
   if (a === 'buscar'){ E.pantalla = 'buscar'; E.soloSust = false; E.msg = ''; dibujar(); return; }
   if (esEncargado() && ['escanear', 'buscar', 'elegir', 'ver-sust'].includes(a)) return; // solo consulta
   if (a === 'sup-tipo'){ E.supTipo = t.dataset.t; dibujar(); return; }
+  if (a === 'sv-recargar'){ if (E.sv) E.sv.local = false; cargarSuperv(); return; }
+  if (a === 'sv-local'){ E.sv.local = true; dibujar(); return; }
+  if (a === 'sv-ed'){ E.sv.ed = t.dataset.ed; E.sv.abierto = ''; E.sv.tablet = ''; E.sv.bomb = ''; cargarSuperv(); return; }
+  if (a === 'sv-vista'){ E.sv.vista = t.dataset.v; E.sv.abierto = ''; dibujar(); window.scrollTo(0, 0); return; }
+  if (a === 'sv-avtipo'){ E.sv.avTipo = t.dataset.t; E.sv.abierto = ''; dibujar(); return; }
+  if (a === 'sv-avfil'){ E.sv.avFil = t.dataset.f; dibujar(); return; }
+  if (a === 'sv-obs'){ E.sv.obs = t.dataset.o; dibujar(); return; }
+  if (a === 'sv-vttipo'){ E.sv.vtTipo = t.dataset.t; dibujar(); return; }
+  if (a === 'sv-abrir'){ E.sv.abierto = E.sv.abierto === t.dataset.u ? '' : t.dataset.u; dibujar(); return; }
   if (a === 'sup-fil'){ E.supFil = t.dataset.f; dibujar(); return; }
   if (a === 'ver-sust'){ E.pantalla = 'buscar'; E.tipo = equiposDe('HID').some(esSust) ? 'HID' : 'HIN'; E.q = ''; E.soloSust = true; E.msg = ''; dibujar(); return; }
   if (a === 'solo-sust'){ E.soloSust = !E.soloSust; dibujar(); return; }
@@ -966,12 +1067,19 @@ document.addEventListener('input', ev => {
   else if (el.dataset.manga) E.control.manga[el.dataset.manga] = el.value;
   else if (el.dataset.dep) E.control.deposito[el.dataset.dep] = el.value;
   else if (el.id === 'b-q'){ E.q = el.value; dibujar(); }
+  else if (el.id === 'sv-q'){ E.sv.q = el.value; dibujar(); const i = document.getElementById('sv-q'); if (i){ i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
 });
 document.addEventListener('change', ev => {
   const el = ev.target;
   if (el.dataset.tk && el.dataset.f === 'val') topeMed(el.dataset.tk, el.value);
   if (el.id === 'l-bomb' && el.value){ E.bomberoPin = el.value; E.pin = ''; E.msg = ''; dibujar(); }
   if (el.id === 'c-foto') fotoElegida(el);
+  if (el.id === 'sv-tipo'){ E.sv.tipo = el.value; dibujar(); }
+  if (el.id === 'sv-tablet'){ E.sv.tablet = el.value; dibujar(); }
+  if (el.id === 'sv-bomb'){ E.sv.bomb = el.value; dibujar(); }
+  if (el.id === 'sv-dias'){ E.sv.dias = el.value === 'cal' ? 'cal' : Number(el.value);
+    if (E.sv.dias === 'cal'){ const d = E.sv.datos; E.sv.desde = E.sv.desde || (d && d.desde) || ''; E.sv.hasta = E.sv.hasta || (d && d.hoy) || ''; dibujar(); } else cargarSuperv(); }
+  if (el.id === 'sv-desde' || el.id === 'sv-hasta'){ E.sv[el.id === 'sv-desde' ? 'desde' : 'hasta'] = el.value; if (E.sv.desde) cargarSuperv(); }
 });
 // Actualización automática: manda lo pendiente y baja bomberos, equipos y avance. Sin botón: pasa sola cada vez que hay señal.
 async function actualizarSola(){
