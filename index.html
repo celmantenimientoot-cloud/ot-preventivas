@@ -897,7 +897,7 @@ function vOt(){
   ${(o.con || []).length && o.estado !== 'hecha' ? `<div class="aviso p-i">La compartís con <b>${esc(o.con.join(', '))}</b>. Repártanse los equipos: lo que guarda cada uno le aparece al otro cuando tiene señal.</div>` : ''}
   ${porSala || partes + equipos}
   <div class="card">${e.cod ? `<div class="cod-eq">${esc(e.cod)}</div>` : ''}
-    ${e.den ? `<div class="den-eq">${esc(e.den)}</div><div class="m">${esc(e.nombre || '')}</div>` : `<div class="t">${esc(e.nombre || e.cod)}</div>`}
+    ${e.den ? `<div class="den-eq">${esc(e.den)}</div>` : `<div class="t">${esc(e.nombre || e.cod)}</div>`}
     ${cerrado ? `<div class="m"><span class="pill p-ok">Guardado por ${esc(por)}</span></div>`
     : `<div class="m" id="ot-prog-m">${hE} de ${nE} tareas</div><div class="prog"><i id="ot-prog-i" style="width:${nE ? Math.round(hE / nE * 100) : 0}%"></i></div>`}</div>
   ${cerrado ? '<p class="o">Este equipo ya está guardado. Si hay que corregir algo, avisá al supervisor.</p>' : `<div class="grid2"><button class="btn" data-a="todo-ok">Marcar todo ✔</button><button class="btn" data-a="todo-borrar" ${hE ? '' : 'disabled'}>Desmarcar todo este equipo</button></div>
