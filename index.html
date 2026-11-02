@@ -19,7 +19,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .net{display:flex;justify-content:space-between;gap:8px;font-size:13px;font-weight:600;padding:6px 16px;background:var(--warn-soft);color:var(--warn)}
 .net.ok{background:var(--ok-soft);color:var(--ok)}
 .net button{background:none;border:0;color:inherit;text-decoration:underline;font-weight:600;padding:0}
-main{flex:1;padding:14px 16px 24px;display:flex;flex-direction:column;gap:12px}
+main{flex:1;padding:14px 16px 24px;display:flex;flex-direction:column;gap:12px;min-width:0;width:100%;box-sizing:border-box}
 h2{font-size:17px;margin:4px 0 0}
 .card{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff}
 .card .t{font-weight:700}.piso{font-size:20px;font-weight:800;color:var(--pri)}.card .m{font-size:13.5px;color:var(--muted)}
@@ -56,10 +56,13 @@ label.f input,label.f select,label.f textarea{border:1px solid #b4c2bd;border-ra
 .foto{max-width:100%;max-height:180px;border-radius:9px}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#14201c;color:#fff;padding:11px 16px;border-radius:10px;font-size:15px;z-index:9;max-width:92vw}
 button.card{font:inherit;color:inherit}
-.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;flex:none}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;flex:none;max-width:100%;min-width:0}
 .chips button{flex:none;border:1px solid #b4c2bd;background:#fff;border-radius:18px;padding:6px 12px;min-height:40px;font-size:14px}
 .chips button[aria-pressed=true]{background:var(--pri);color:#fff;border-color:var(--pri)}
 .chips button.hecho:not([aria-pressed=true]){background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.chips button small{display:block;font-size:11px;opacity:.8;font-weight:400}
+.cod-eq{display:inline-block;font-family:ui-monospace,Consolas,monospace;font-size:19px;font-weight:700;letter-spacing:.3px;background:#fff3b0;border:2px solid #e0a100;border-radius:8px;padding:3px 10px;margin-bottom:6px}
+.den-eq{font-size:16px;font-weight:700;margin-bottom:2px}
 .sec{font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:8px;padding-bottom:4px;border-bottom:2px solid var(--line)}
 .it2{padding:9px 0;border-bottom:1px solid #eef2f0;font-size:15.5px}.it2 .fila{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .it2 textarea{width:100%;border:1px solid #b4c2bd;border-radius:9px;padding:8px;margin-top:6px;font-size:16px}
@@ -844,15 +847,35 @@ function vInicioTec(){
   ${L.length ? L.map(card).join('') : `<div class="aviso p-ok">✔ ${I ? 'Todo hecho en ' + I.nom + '.' : 'No tenés OT por hacer.'} Las nuevas aparecen solas cuando hay señal.</div>`}
   <p class="o">Datos del ${E.cat.bajado ? fmtD(E.cat.bajado) + ' ' + E.cat.bajado.slice(11, 16) : '–'} · abrí la app con señal al empezar la semana</p></main>`;
 }
+// Rutinas con salas (ej. tableros de ascensores del piso 28, en 3 salas): se recorre sala por sala, cada una con sus tableros.
+// Una parte con las salas (sin código) y otra con los equipos, cada uno con "· sala X" en el nombre. Si no encaja, null.
+function salasDe(ru){
+  const P = ru.def.partes; if (P.length !== 2) return null;
+  const si = P.findIndex(p => p.equipos.length > 1 && p.equipos.every(e => e.noPlan)), ti = 1 - si; if (si < 0) return null;
+  const n = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const sala = P[ti].equipos.map(e => { const m = String(e.nombre || '').match(/·\s*sala\s+(.+)$/i); if (!m) return -1;
+    const w = n(m[1]).split(/\s+/).filter(Boolean); return P[si].equipos.findIndex(x => w.every(p => n(x.nombre).split(/[\s()]+/).indexOf(p) >= 0)); });
+  return sala.every(k => k >= 0) ? { si, ti, sala } : null;
+}
 function vOt(){
   const c = E.ot, o = T_().ots.find(x => x.id === c.id), ru = o && T_().rutinas[o.rutina];
   if (!o || !ru){ E.pantalla = 'inicio'; return vInicioTec(); }
   const b = borrador(o.id), toca = tocaEq(ru, o, c.parte, c.eq), p = ru.def.partes[c.parte], e = p.equipos[c.eq];
   const por = o.estado === 'hecha' ? (guardadoPor(o, c.parte, c.eq) || 'la OT ya está hecha') : guardadoPor(o, c.parte, c.eq), cerrado = !!por;
   const [h, t] = avanceOt(o), ab = T_().abiertas;
-  const chips = (L, sel, a, listo) => L.length > 1 ? `<div class="chips">${L.map((x, i) => `<button data-a="${a}" data-i="${i}" aria-pressed="${i === sel}" class="${listo(i) ? 'hecho' : ''}">${esc(x)}</button>`).join('')}</div>` : '';
+  // x: texto o [principal, aclaración] (equipos: el código del plan y abajo el nombre)
+  const chips = (L, sel, a, listo) => L.length > 1 ? `<div class="chips">${L.map((x, i) => `<button data-a="${a}" data-i="${i}" aria-pressed="${i === sel}" class="${listo(i) ? 'hecho' : ''}">${Array.isArray(x) ? esc(x[0]) + (x[1] ? `<small>${esc(x[1])}</small>` : '') : esc(x)}</button>`).join('')}</div>` : '';
   const partes = chips(ru.def.partes.map(x => x.nombre || 'Equipos'), c.parte, 'parte', i => ru.def.partes[i].equipos.every((x, ei) => guardadoPor(o, i, ei)));
-  const equipos = chips(p.equipos.map(x => x.nombre || x.cod), c.eq, 'equipo', i => guardadoPor(o, c.parte, i));
+  const equipos = chips(p.equipos.map(x => x.cod ? [x.cod, x.den || x.nombre] : [x.nombre]), c.eq, 'equipo', i => guardadoPor(o, c.parte, i));
+  const g = salasDe(ru);
+  let porSala = '';
+  if (g){
+    const S = ru.def.partes[g.si].equipos, Tb = ru.def.partes[g.ti].equipos, k = c.parte === g.si ? c.eq : g.sala[c.eq];
+    const deSala = Tb.map((x, j) => j).filter(j => g.sala[j] === k), salaLista = i => guardadoPor(o, g.si, i) && Tb.every((x, j) => g.sala[j] !== i || guardadoPor(o, g.ti, j));
+    const btn = (pi, i, txt, chico, on, listo) => `<button data-a="ir" data-p="${pi}" data-i="${i}" aria-pressed="${on}" class="${listo ? 'hecho' : ''}">${esc(txt)}${chico ? `<small>${esc(chico)}</small>` : ''}</button>`;
+    porSala = `<div class="chips">${S.map((x, i) => btn(g.si, i, x.nombre, Tb.filter((y, j) => g.sala[j] === i).length + ' tablero' + (Tb.filter((y, j) => g.sala[j] === i).length === 1 ? '' : 's'), i === k, salaLista(i))).join('')}</div>
+    <div class="chips">${btn(g.si, k, 'Sala', 'generalidades', c.parte === g.si, guardadoPor(o, g.si, k))}${deSala.map(j => btn(g.ti, j, Tb[j].cod || Tb[j].nombre, Tb[j].cod ? String(Tb[j].den || Tb[j].nombre).replace(/\s*·\s*sala\s+.+$/i, '') : '', c.parte === g.ti && c.eq === j, guardadoPor(o, g.ti, j))).join('')}</div>`;
+  }
   let html = '';
   if (!cerrado) p.secciones.forEach(s => {
     const items = s.items.filter(toca); if (!items.length) return;
@@ -872,10 +895,11 @@ function vOt(){
   return barra((o.piso ? 'PISO ' + o.piso + ' · ' : '') + o.nombre, esc(o.semanaTxt), '<button data-a="inicio">Volver</button>') + `<main>
   ${o.estado === 'hecha' ? '<div class="aviso p-i">Esta OT ya está terminada. Si hay que corregir algo, avisá al supervisor.</div>' : ''}
   ${(o.con || []).length && o.estado !== 'hecha' ? `<div class="aviso p-i">La compartís con <b>${esc(o.con.join(', '))}</b>. Repártanse los equipos: lo que guarda cada uno le aparece al otro cuando tiene señal.</div>` : ''}
-  ${partes}${equipos}
-  <div class="card"><div class="t">${esc(e.nombre || e.cod)}</div>
-    ${cerrado ? `<div class="m">${esc(e.cod || '')} · <span class="pill p-ok">Guardado por ${esc(por)}</span></div>`
-    : `<div class="m" id="ot-prog-m">${esc(e.cod || '')} ${e.cod ? '·' : ''} ${hE} de ${nE} tareas</div><div class="prog"><i id="ot-prog-i" style="width:${nE ? Math.round(hE / nE * 100) : 0}%"></i></div>`}</div>
+  ${porSala || partes + equipos}
+  <div class="card">${e.cod ? `<div class="cod-eq">${esc(e.cod)}</div>` : ''}
+    ${e.den ? `<div class="den-eq">${esc(e.den)}</div><div class="m">${esc(e.nombre || '')}</div>` : `<div class="t">${esc(e.nombre || e.cod)}</div>`}
+    ${cerrado ? `<div class="m"><span class="pill p-ok">Guardado por ${esc(por)}</span></div>`
+    : `<div class="m" id="ot-prog-m">${hE} de ${nE} tareas</div><div class="prog"><i id="ot-prog-i" style="width:${nE ? Math.round(hE / nE * 100) : 0}%"></i></div>`}</div>
   ${cerrado ? '<p class="o">Este equipo ya está guardado. Si hay que corregir algo, avisá al supervisor.</p>' : `<div class="grid2"><button class="btn" data-a="todo-ok">Marcar todo ✔</button><button class="btn" data-a="todo-borrar" ${hE ? '' : 'disabled'}>Desmarcar todo este equipo</button></div>
     <p class="m" style="margin:0">Para desmarcar una sola tarea, tocá de nuevo el ✔, la ✖ o N/A. <b>N/A = no aplica</b>: esa tarea no existe en este equipo (por ejemplo, no tiene segundo motor). No va como problema: el supervisor la saca de la rutina.</p>`}
   <div>${html}</div>
@@ -961,7 +985,7 @@ function actualizarProgresoOt(){
   const b = borrador(o.id), toca = tocaEq(ru, o, c.parte, c.eq), p = ru.def.partes[c.parte], e = p.equipos[c.eq];
   const its = p.secciones.flatMap(s => s.items.filter(toca)), hE = its.filter(it => tareaLista(b.resp[claveT(c.parte, c.eq, it.id)], it)).length;
   const m = document.getElementById('ot-prog-m'), i = document.getElementById('ot-prog-i'), bt = document.getElementById('ot-guardar');
-  if (m) m.textContent = (e.cod ? e.cod + ' · ' : '') + hE + ' de ' + its.length + ' tareas';
+  if (m) m.textContent = hE + ' de ' + its.length + ' tareas';
   if (i) i.style.width = (its.length ? Math.round(hE / its.length * 100) : 0) + '%';
   if (bt){ bt.disabled = hE !== its.length; bt.textContent = hE === its.length ? 'GUARDAR ESTE EQUIPO' : 'Guardar este equipo (faltan ' + (its.length - hE) + ' tareas)'; }
 }
@@ -981,6 +1005,13 @@ async function guardarEquipo(){
   E.cola = await DB.cola();
   // El siguiente equipo que falte (primero en este grupo, después en los otros)
   let sig = null;
+  const g = salasDe(ru);
+  if (g){ // por sala: la sala y sus tableros; después la sala siguiente
+    const orden = [];
+    ru.def.partes[g.si].equipos.forEach((x, k) => { orden.push([g.si, k]); g.sala.forEach((s, j) => { if (s === k) orden.push([g.ti, j]); }); });
+    const aca = orden.findIndex(([pi, ei]) => pi === c.parte && ei === c.eq);
+    sig = orden.slice(aca + 1).concat(orden.slice(0, aca + 1)).find(([pi, ei]) => !guardadoPor(o, pi, ei)) || null;
+  }
   ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!sig && !guardadoPor(o, pi, ei) && (pi > c.parte || (pi === c.parte && ei > c.eq))) sig = [pi, ei]; }));
   ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!sig && !guardadoPor(o, pi, ei)) sig = [pi, ei]; }));
   const [h, t] = avanceOt(o);
@@ -1033,6 +1064,7 @@ document.addEventListener('click', async ev => {
   if (a === 'abrir-ot'){ E.ot = { id: t.dataset.id, parte: 0, eq: 0 }; E.pantalla = 'ot'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'parte'){ E.ot.parte = +t.dataset.i; E.ot.eq = 0; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'equipo'){ E.ot.eq = +t.dataset.i; dibujar(); window.scrollTo(0, 0); return; }
+  if (a === 'ir'){ E.ot.parte = +t.dataset.p; E.ot.eq = +t.dataset.i; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'tr'){ // tocar de nuevo el mismo botón lo desmarca (las mediciones y la observación escritas se mantienen)
     const r = borrador(E.ot.id).resp, v = r[t.dataset.k] = r[t.dataset.k] || {};
     if (v.e === t.dataset.v) delete v.e; else v.e = t.dataset.v;
