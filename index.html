@@ -646,16 +646,26 @@ function vEscanear(){
   <div class="cam"><video id="video" playsinline muted></video><div class="marco"></div><span id="cam-aviso">Apuntá al QR de la posición</span></div>
   <button class="big sec" data-a="buscar">Buscar sin QR (etiqueta rota)</button></main>`;
 }
+// Orden de los pisos: de arriba hacia abajo (29 … 1, PB, 1SS, 2SS…)
+const ordenPiso = p => { const t = String(p || '').toUpperCase().replace(/^PISO\s*/, '').trim(); return /SS/.test(t) ? -(parseInt(t) || 1) : t === 'PB' ? 0 : parseInt(t) || 0; };
 function vBuscar(){
-  const q = E.q.trim().toUpperCase(), h = hechosDe(E.tipo);
-  const L = equiposDe(E.tipo).filter(e => !E.soloSust || esSust(e)).filter(e => !q || [e.pos, e.piso, e.ubic, e.ident, esSust(e) ? 'SUSTITUTA' : ''].some(x => String(x || '').toUpperCase().includes(q))).slice(0, 80);
-  const nSust = equiposDe(E.tipo).filter(esSust).length;
+  const q = E.q.trim().toUpperCase(), h = hechosDe(E.tipo), todos = equiposDe(E.tipo);
+  const pisos = [...new Set(todos.map(e => String(e.piso || '').trim()).filter(Boolean))].sort((a, b) => ordenPiso(b) - ordenPiso(a) || a.localeCompare(b));
+  if (E.bPiso && pisos.indexOf(E.bPiso) < 0) E.bPiso = '';
+  const est = E.bEst || 'todos', base = todos.filter(e => !E.soloSust || esSust(e)).filter(e => !E.bPiso || String(e.piso || '').trim() === E.bPiso)
+    .filter(e => !q || [e.pos, e.piso, e.ubic, e.ident, esSust(e) ? 'SUSTITUTA' : ''].some(x => String(x || '').toUpperCase().includes(q)));
+  const nHechos = base.filter(e => h[e.pos]).length;
+  const L = base.filter(e => est === 'todos' || (est === 'hechos' ? h[e.pos] : !h[e.pos]))
+    .sort((a, b) => ordenPiso(b.piso) - ordenPiso(a.piso) || String(a.pos).localeCompare(String(b.pos), 'es', { numeric: true }));
+  const nSust = todos.filter(esSust).length;
   return barra('Buscar sin QR', esc(E.sesion.nombre), '<button data-a="inicio">Volver</button>') + `<main>
   <div class="seg">${Object.keys(E.cat.tipos).map(t => `<button data-a="tipo" data-t="${t}" aria-pressed="${t === E.tipo}">${esc(E.cat.tipos[t])}</button>`).join('')}</div>
-  <label class="f">Posición, piso o ubicación<input id="b-q" value="${esc(E.q)}" autocomplete="off" placeholder="Ej.: 3SS, M28/9, Pedraza"></label>
+  <div class="grid2"><label class="f">Piso<select id="b-piso"><option value="">Todos los pisos</option>${pisos.map(x => `<option ${x === E.bPiso ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
+    <label class="f">Buscar<input id="b-q" value="${esc(E.q)}" autocomplete="off" placeholder="Posición, ubicación o ID"></label></div>
+  <div class="seg">${[['todos', 'Todos', base.length], ['pend', 'Pendientes', base.length - nHechos], ['hechos', 'Hechos', nHechos]].map(([k, n, c]) => `<button data-a="b-est" data-v="${k}" aria-pressed="${k === est}">${n} (${c})</button>`).join('')}</div>
   ${(E.tipo === 'HID' || E.tipo === 'HIN') && (nSust || E.soloSust) ? `<button class="btn" data-a="solo-sust" aria-pressed="${!!E.soloSust}">${E.soloSust ? 'Ver todos los nichos' : 'Ver solo los ' + nSust + ' con manga sustituta'}</button>` : ''}
   <div class="lista">${L.map(e => `<button class="row" data-a="elegir" data-pos="${esc(e.pos)}" data-t="${e.tipo}"><span><span class="mono">${esc(e.pos)}</span><br><span class="m">${esc(e.piso)} · ${esc(e.ubic)}</span></span>
-    <span>${esSust(e) ? '<span class="pill p-w">Sustituta</span> ' : ''}${h[e.pos] ? '<span class="pill p-ok">Hecho</span>' : ''}</span></button>`).join('') || '<p class="o">No hay equipos que coincidan.</p>'}</div></main>`;
+    <span>${esSust(e) ? '<span class="pill p-w">Sustituta</span> ' : ''}${h[e.pos] ? '<span class="pill p-ok">Hecho</span>' : '<span class="pill p-i">Pendiente</span>'}</span></button>`).join('') || '<p class="o">No hay equipos que coincidan.</p>'}</div></main>`;
 }
 // Ficha del equipo: todos los datos de la planilla, solo para ver. Vencimientos con color:
 // verde = más de 90 días, azul = vence en 90 días o menos, rojo = vencido.
@@ -698,8 +708,10 @@ function vControl(){
   const abiertas = rut.filter(([k]) => E.cat.abiertas[e.tipo + '|' + e.pos + '|' + k]).map(([k, t]) => t + ' (' + E.cat.abiertas[e.tipo + '|' + e.pos + '|' + k] + ')');
   const cm = c.cambio, motivos = (E.cat.motivos || {})[e.tipo] || ['Otro'];
   const camposCambio = EXT
-    ? [['ident', c.reemplazo ? 'ID del extintor NUEVO' : 'ID del extintor'], ...(c.reemplazo ? [['clase', 'Tipo (ABC, CO2…)'], ['peso', 'Peso (ej.: 5kg)'], ['vtoCarga', 'Vence la carga', 'date'], ['vtoPH', 'Vence la prueba hidráulica', 'date'], ['vtoExt', 'Vence el extintor', 'date']] : [])]
-    : [['ident', c.reemplazo ? 'Código de la manga NUEVA' : 'Código de manga'], ...(c.reemplazo ? [['vtoManga', 'Vence la manga', 'date']] : [])];
+    ? [['ident', c.reemplazo ? 'ID del extintor NUEVO' : 'ID del extintor'], ['clase', 'Tipo (ABC, CO2…)'], ['peso', 'Peso (ej.: 5kg)'], ['vtoCarga', 'Vence la carga', 'date'], ['vtoPH', 'Vence la prueba hidráulica', 'date'], ['vtoExt', 'Vence el extintor', 'date']]
+    : [['ident', c.reemplazo ? 'Código de la manga NUEVA' : 'Código de manga'], ['vtoManga', 'Vence la manga', 'date']];
+  // Equipo de piso sin datos cargados (ID o vencimientos): se pide completarlos con la etiqueta
+  const faltanDatos = !esDep(e) && (EXT ? ['ident', 'vtoCarga', 'vtoPH'] : ['ident', 'vtoManga']).filter(k => !e[k]).length;
   const cabeza = barra((EXT ? 'Extintor ' : 'Nicho ') + e.pos, esc(e.piso) + ' · ' + esc(e.ubic), '<button data-a="cancelar">Cancelar</button>')
     + (c.fuera ? `<div class="aviso" style="margin:8px 12px 0;background:var(--info-soft);color:var(--info);border-radius:10px;padding:10px 12px">La recorrida de ${esc(String(E.cat.tipos[e.tipo] || '').toLowerCase())} está en espera: usalo solo para <b>reemplazar el equipo</b> (vencido, despresurizado…) o <b>cambiar la manga</b>. No cuenta para la recorrida.</div>` : '');
   const foto = `<label class="btn" style="display:flex;align-items:center;justify-content:center;gap:8px">📷 ${c.foto ? 'Cambiar foto' : 'Sacar foto (opcional)'}<input type="file" accept="image/*" capture="environment" id="c-foto" hidden></label>
@@ -715,8 +727,9 @@ function vControl(){
   return cabeza + `<main>
   ${ya ? `<div class="aviso p-i">Ya se controló esta quincena (${fmtD(ya)} ${ya.slice(11, 16)}). Si lo guardás de nuevo, queda el último.</div>` : ''}
   ${fichaEquipo(e)}
+  ${faltanDatos && !cm && !esSust(e) ? `<div class="aviso p-w">A este ${EXT ? 'extintor' : 'nicho'} le faltan datos (${EXT ? 'ID o vencimientos' : 'código o vencimiento de la manga'}). Completalos con la etiqueta.</div><button class="big" data-a="cambio" data-r="0">COMPLETAR DATOS</button>` : ''}
   ${vencido && !cm ? `<button class="big" data-a="cambio" data-r="1" data-motivo="${esc(vencido[2])}" style="background:var(--bad)">Reemplazar ahora (${esc(vencido[2].toLowerCase())})</button>` : ''}
-  ${cm ? `<div class="card"><div class="t">${c.reemplazo ? (EXT ? 'Reemplazo con un extintor del depósito de reserva' : 'Cambio de manga') : 'Corregir ' + (EXT ? 'ID' : 'código de manga')}</div>
+  ${cm ? `<div class="card"><div class="t">${c.reemplazo ? (EXT ? 'Reemplazo con un extintor del depósito de reserva' : 'Cambio de manga') : 'Corregir los datos del ' + (EXT ? 'extintor' : 'nicho')}</div>
       ${c.reemplazo ? `<div class="m">Sale: ${EXT ? 'ID ' + esc(e.ident || '–') + ' ' + esc([e.clase, e.peso].filter(Boolean).join(' ')) : 'manga ' + esc(e.ident || '–')}.${EXT && !esDep(e) && depT_() ? ' Se guarda en el depósito, A RECARGAR.' : ''} Queda una línea para el supervisor${EXT ? ' (sugerido: DENAPOLI)' : ''}.</div>
         ${EXT && depDisponibles(e.pos).length ? `<div class="t" style="margin-top:10px">¿Cuál ponés del depósito?</div>
           <div class="lista">${depDisponibles(e.pos).map(d => { const v = vencidoExt(d); return `<button class="row" data-a="dep-elegir" data-pos="${esc(d.pos)}" ${v ? 'disabled' : ''} aria-pressed="${cm.desde === d.pos}" style="${cm.desde === d.pos ? 'border-color:var(--ok);background:var(--ok-soft)' : ''}">
@@ -724,12 +737,13 @@ function vControl(){
             <span>${v ? '<span class="pill p-b">Vencido</span>' : cm.desde === d.pos ? '<span class="pill p-ok">Elegido</span>' : ''}</span></button>`; }).join('')}</div>
           ${cm.desde ? '<button class="btn" data-a="dep-otro">No es del depósito: escribir los datos</button>' : '<div class="m">Si el que ponés no está en la lista, completá los datos abajo.</div>'}` : ''}
         <label class="f" style="margin-top:8px">Motivo<select data-cambio="motivo"><option value="">Elegí el motivo…</option>${motivos.map(m => `<option ${m === cm.motivo ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select></label>` : ''}
-      <div class="grid2" style="margin-top:8px;${cm.desde ? 'display:none' : ''}">${camposCambio.map(([k, l, t]) => `<label class="f">${l}<input data-cambio="${k}" type="${t || 'text'}" value="${esc(cm[k] || '')}"></label>`).join('')}</div>
+      ${cm.desde ? '<div class="m" style="margin-top:8px">Revisá los datos con la etiqueta del extintor y corregí si hace falta (sobre todo los <b>vencimientos</b>):</div>' : ''}
+      <div class="grid2" style="margin-top:8px">${camposCambio.filter(([k]) => !cm.desde || k !== 'ident').map(([k, l, t]) => `<label class="f">${l}<input data-cambio="${k}" type="${t || 'text'}" value="${esc(cm[k] || '')}"></label>`).join('')}</div>
       <button class="btn" data-a="cambio-no" style="margin-top:8px">Cancelar el cambio</button></div>`
     : esSust(e) ? `<button class="big" data-a="manga" data-v="vuelve">VOLVIÓ LA MANGA: CARGAR CÓDIGO NUEVO</button>
       <button class="btn" data-a="vacio">No hay equipo en esta posición</button>`
     : `${EXT ? '' : '<button class="btn" data-a="manga" data-v="retiro">Extinred se lleva la manga (queda sustituta)</button>'}
-      <div class="grid2"><button class="btn" data-a="cambio" data-r="1">${EXT ? 'Reemplazar extintor' : 'Cambiar manga'}</button><button class="btn" data-a="cambio" data-r="0">Corregir ${EXT ? 'ID' : 'código'}</button></div>
+      <div class="grid2"><button class="btn" data-a="cambio" data-r="1">${EXT ? 'Reemplazar extintor' : 'Cambiar manga'}</button><button class="btn" data-a="cambio" data-r="0">Corregir datos</button></div>
       <button class="btn" data-a="vacio">No hay equipo en esta posición</button>`}
   <h2>${c.reemplazo ? 'Estado del equipo nuevo' : 'Estado del ' + (EXT ? 'extintor' : 'nicho')} <span class="m" style="font-weight:400">(SÍ = está bien)</span></h2>
   <div>${rut.map(([k, t]) => `<div class="it"><span>${esc(t)}</span><span class="sn" role="group" aria-label="${esc(t)}">
@@ -1122,6 +1136,7 @@ document.addEventListener('click', async ev => {
   if (a === 'sup-fil'){ E.supFil = t.dataset.f; dibujar(); return; }
   if (a === 'ver-sust'){ E.pantalla = 'buscar'; E.tipo = equiposDe('HID').some(esSust) ? 'HID' : 'HIN'; E.q = ''; E.soloSust = true; E.msg = ''; dibujar(); return; }
   if (a === 'solo-sust'){ E.soloSust = !E.soloSust; dibujar(); return; }
+  if (a === 'b-est'){ E.bEst = t.dataset.v; dibujar(); return; }
   if (a === 'manga'){ E.control.manga = { accion: t.dataset.v, ident: '', vto: '' }; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'manga-no'){ E.control.manga = null; E.msg = ''; dibujar(); return; }
   if (a === 'manga-ok'){ guardarManga(); return; }
@@ -1137,7 +1152,10 @@ document.addEventListener('click', async ev => {
     const k = t.dataset.k; if (E.control.resp[k] === t.dataset.v) delete E.control.resp[k]; else E.control.resp[k] = t.dataset.v;
     E.msg = ''; dibujar(); return; }
   if (a === 'todo-si'){ rutDe(E.control.eq).forEach(([k]) => { E.control.resp[k] = 'SI'; }); dibujar(); return; }
-  if (a === 'cambio'){ E.control.reemplazo = t.dataset.r === '1'; E.control.cambio = { reemplazo: E.control.reemplazo, ident: '', motivo: t.dataset.motivo || '' }; dibujar(); return; }
+  if (a === 'cambio'){ const e = E.control.eq; E.control.reemplazo = t.dataset.r === '1';
+    E.control.cambio = Object.assign({ reemplazo: E.control.reemplazo, ident: '', motivo: t.dataset.motivo || '' },
+      E.control.reemplazo ? {} : Object.fromEntries((e.tipo === 'EXT' ? DATOS_EXT : ['ident', 'vtoManga']).map(k => [k, e[k] || ''])));
+    dibujar(); return; }
   if (a === 'vacio'){ E.control.vacio = true; E.msg = ''; dibujar(); return; }
   if (a === 'vacio-no'){ E.control.vacio = false; dibujar(); return; }
   if (a === 'cambio-no'){ E.control.cambio = null; E.control.reemplazo = false; dibujar(); return; }
@@ -1159,6 +1177,7 @@ document.addEventListener('input', ev => {
 document.addEventListener('change', ev => {
   const el = ev.target;
   if (el.dataset.tk && el.dataset.f === 'val') topeMed(el.dataset.tk, el.value);
+  if (el.id === 'b-piso'){ E.bPiso = el.value; dibujar(); return; }
   if (el.id === 'l-bomb' && el.value){ E.bomberoPin = el.value; E.pin = ''; E.msg = ''; dibujar(); }
   if (el.id === 'c-foto') fotoElegida(el);
   if (el.id === 'sv-tipo'){ E.sv.tipo = el.value; dibujar(); }
