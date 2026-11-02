@@ -397,7 +397,7 @@ function vSuperv(){
 }
 // El control completo: cada punto con ✔ o ✖, la observación, la foto, el bombero y la tablet
 function svDetalle(r, d){
-  const ctl = (d.controles || {})[r.tipo] || [], resp = r.resp || {};
+  const resp = r.resp || {}, ctl = resp.GEN ? [['GEN', 'Estado general']] : (d.controles || {})[r.tipo] || [];
   const puntos = resp.vacio ? '<div class="sv-p no">✖ No había equipo en la posición</div>'
     : ctl.map(([k, t]) => resp[k] ? `<div class="sv-p ${resp[k] === 'NO' ? 'no' : 'si'}">${resp[k] === 'NO' ? '✖' : '✔'} ${esc(t)}</div>` : '').join('') || '<div class="m">Sin puntos registrados.</div>';
   return `<div class="sv-det"><div class="m">${svHora(r.ts)} · <b>${esc(r.bombero || '')}</b>${r.tablet ? ' · ' + esc(r.tablet) : ''}${r.ident ? ' · ID ' + esc(r.ident) : ''}</div>
@@ -499,8 +499,10 @@ function abrirControl(pos, tipo){
   E.control = { eq, resp: {}, obs: '', foto: '', cambio: null, editar: false, reemplazo: false, fuera: !rondaAbierta(eq.tipo) };
   E.pantalla = 'control'; E.msg = ''; dibujar();
 }
+// Los puntos del control: los del tipo, o uno solo (equipo con control simple, ej. el nicho de la vereda municipal)
+const rutDe = e => e && e.control === 'simple' ? [['GEN', 'Estado general']] : E.cat.rutinas[e.tipo];
 async function guardarControl(){
-  const c = E.control, rut = E.cat.rutinas[c.eq.tipo];
+  const c = E.control, rut = rutDe(c.eq);
   const hayNo = !c.vacio && rut.some(([k]) => c.resp[k] === 'NO');
   if (!c.vacio){
     const faltan = rut.filter(([k]) => !c.resp[k]);
@@ -688,7 +690,7 @@ function vControl(){
     <div class="card"><div class="m">${depRecargar(e) ? 'Acá está guardado el extintor retirado, esperando que DENAPOLI lo recargue.' : 'Esta posición del depósito está vacía.'} No hace falta controlarla.</div></div>
     <button class="big" data-a="dep-cargar">VOLVIÓ DE DENAPOLI: CARGAR EXTINTOR</button></main>`;
   }
-  const c = E.control, e = c.eq, rut = E.cat.rutinas[e.tipo], ya = hechosDe(e.tipo)[e.pos];
+  const c = E.control, e = c.eq, rut = rutDe(e), ya = hechosDe(e.tipo)[e.pos];
   const EXT = e.tipo === 'EXT';
   // Vencimientos del equipo que está en la posición; si alguno venció, se ofrece reemplazarlo en el momento
   const vtos = EXT ? [['Carga', e.vtoCarga, 'Carga vencida'], ['Prueba hidráulica', e.vtoPH, 'Prueba hidráulica vencida'], ['Extintor', e.vtoExt, 'Carga vencida']] : [['Manga', e.vtoManga, 'Manga vencida']];
@@ -1134,7 +1136,7 @@ document.addEventListener('click', async ev => {
   if (a === 'resp'){ // tocar de nuevo la misma respuesta la desmarca
     const k = t.dataset.k; if (E.control.resp[k] === t.dataset.v) delete E.control.resp[k]; else E.control.resp[k] = t.dataset.v;
     E.msg = ''; dibujar(); return; }
-  if (a === 'todo-si'){ E.cat.rutinas[E.control.eq.tipo].forEach(([k]) => { E.control.resp[k] = 'SI'; }); dibujar(); return; }
+  if (a === 'todo-si'){ rutDe(E.control.eq).forEach(([k]) => { E.control.resp[k] = 'SI'; }); dibujar(); return; }
   if (a === 'cambio'){ E.control.reemplazo = t.dataset.r === '1'; E.control.cambio = { reemplazo: E.control.reemplazo, ident: '', motivo: t.dataset.motivo || '' }; dibujar(); return; }
   if (a === 'vacio'){ E.control.vacio = true; E.msg = ''; dibujar(); return; }
   if (a === 'vacio-no'){ E.control.vacio = false; dibujar(); return; }
