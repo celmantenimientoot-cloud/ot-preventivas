@@ -507,7 +507,6 @@ async function guardarControl(){
   if (!c.vacio){
     const faltan = rut.filter(([k]) => !c.resp[k]);
     if (faltan.length){ E.msg = 'Falta responder: ' + faltan.map(x => x[1]).join(', ') + '.'; dibujar(); return; }
-    if (hayNo && !c.obs.trim()){ E.msg = 'Hay un NO: escribí una observación corta.'; dibujar(); document.getElementById('c-obs').focus(); return; }
     if (c.cambio && c.reemplazo && !c.cambio.motivo){ E.msg = 'Elegí el motivo del reemplazo.'; dibujar(); return; }
     if (c.cambio && c.reemplazo && !String(c.cambio.ident || '').trim()){ E.msg = 'Completá el ID nuevo o cancelá el cambio.'; dibujar(); return; }
   }
@@ -721,7 +720,7 @@ function vControl(){
   if (c.vacio) return cabeza + `<main>
     ${esDep(e) ? '<div class="card"><div class="t">Posición del depósito sin extintor</div><div class="m">Queda VACÍA (no se avisa al supervisor). Ahí se guarda el próximo extintor que se retire de un piso.</div></div>' : ''}
     <div class="card" ${esDep(e) ? 'hidden' : ''}><div class="t">No hay equipo en esta posición</div><div class="m">Se avisa al supervisor. Si después se coloca uno, en la próxima recorrida usá "${EXT ? 'Reemplazar extintor' : 'Cambiar manga'}".</div></div>
-    <label class="f">Observación (opcional)<textarea id="c-obs" rows="2" maxlength="300" placeholder="Ej.: se retiró para recarga">${esc(c.obs)}</textarea></label>
+    <div class="aviso p-i">Si ves algo que <b>no está en esta lista de control</b>, avisale a tu encargado.</div>
     ${foto}${aviso()}
     <button class="btn" data-a="vacio-no">Volver: el equipo está</button>
     <button class="big" data-a="guardar">GUARDAR Y SEGUIR</button></main>`;
@@ -751,7 +750,7 @@ function vControl(){
     <button class="si" data-a="resp" data-k="${k}" data-v="SI" aria-pressed="${c.resp[k] === 'SI'}">SÍ</button><button class="no" data-a="resp" data-k="${k}" data-v="NO" aria-pressed="${c.resp[k] === 'NO'}">NO</button></span></div>`).join('')}</div>
   <button class="btn" data-a="todo-si">Todo SÍ</button>
   <p class="m" style="margin:4px 0 0">Para desmarcar una respuesta, tocá de nuevo el mismo SÍ o NO.</p>
-  <label class="f">Observación${rut.some(([k]) => c.resp[k] === 'NO') ? ' (obligatoria si hay un NO)' : ''}<textarea id="c-obs" rows="2" maxlength="300">${esc(c.obs)}</textarea></label>
+  <div class="aviso p-i">Si ves algo que <b>no está en esta lista de control</b>, avisale a tu encargado.</div>
   ${foto}
   ${rut.some(([k]) => c.resp[k] === 'NO') ? `<div class="aviso err">Se propone un correctivo al supervisor.${abiertas.length ? ' Ya hay uno abierto por: ' + esc(abiertas.join(', ')) + ' (no se repite).' : ''}</div>` : ''}
   ${vencido && !c.reemplazo ? '<div class="aviso err">Está vencido: si no lo reemplazás ahora, se avisa al supervisor.</div>' : ''}
