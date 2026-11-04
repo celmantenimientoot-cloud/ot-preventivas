@@ -847,20 +847,37 @@ function vInicioTec(){
   }
   const enCarpeta = insts.length > 1 ? E.inst : '';
   // Solo lo que falta: las OT hechas (ya recibidas por el sistema) no se muestran, para no confundir
-  const L = todas.filter(o => o.estado !== 'hecha' && (!enCarpeta || instOt(o) === enCarpeta)).sort((a, b) => a.semana < b.semana ? -1 : 1);
+  const L0 = todas.filter(o => o.estado !== 'hecha' && (!enCarpeta || instOt(o) === enCarpeta));
+  // Ordenar o filtrar por piso o por tipo (UPS, tablero seccional, blindobarra…): equipos de la misma sala se hacen juntos
+  const tipoDe = o => (T_().rutinas[o.rutina] || {}).fam || 'Otros';
+  const pisoNum = o => { const t = String(o.piso || '').toUpperCase(); return /SS/.test(t) ? -parseInt(t) || -1 : /^PB/.test(t) ? 0 : parseFloat(t) || 999; };
+  const tipos = [...new Set(L0.map(tipoDe))].sort((a, b) => a.localeCompare(b, 'es'));
+  const pisos = [...new Set(L0.map(o => String(o.piso || '')).filter(Boolean))].sort((a, b) => pisoNum({ piso: a }) - pisoNum({ piso: b }));
+  if (E.fTipo && !tipos.includes(E.fTipo)) E.fTipo = '';
+  if (E.fPiso && !pisos.includes(E.fPiso)) E.fPiso = '';
+  const ord = E.orden || 'semana';
+  const L = L0.filter(o => (!E.fTipo || tipoDe(o) === E.fTipo) && (!E.fPiso || String(o.piso) === E.fPiso))
+    .sort((a, b) => ord === 'piso' ? pisoNum(a) - pisoNum(b) || tipoDe(a).localeCompare(tipoDe(b), 'es')
+      : ord === 'tipo' ? tipoDe(a).localeCompare(tipoDe(b), 'es') || pisoNum(a) - pisoNum(b)
+      : (a.semana < b.semana ? -1 : a.semana > b.semana ? 1 : 0));
+  const filtros = L0.length > 1 ? `<div class="card" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px">
+    <label class="f" style="margin:0">Ordenar<select id="tec-orden"><option value="semana" ${ord === 'semana' ? 'selected' : ''}>Semana</option><option value="piso" ${ord === 'piso' ? 'selected' : ''}>Piso</option><option value="tipo" ${ord === 'tipo' ? 'selected' : ''}>Tipo</option></select></label>
+    <label class="f" style="margin:0">Tipo<select id="tec-tipo"><option value="">Todos</option>${tipos.map(x => `<option ${x === E.fTipo ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
+    <label class="f" style="margin:0">Piso<select id="tec-piso"><option value="">Todos</option>${pisos.map(x => `<option ${x === E.fPiso ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label></div>
+    ${E.fTipo || E.fPiso ? `<div class="m" style="margin:-4px 0 8px">Mostrando ${L.length} de ${L0.length} · <button class="lnk" data-a="tec-filtro-no" style="background:none;border:0;color:var(--ok);font:inherit;text-decoration:underline;padding:0">ver todas</button></div>` : ''}` : '';
   const card = o => {
     const ru = T_().rutinas[o.rutina] || {}, [h, t] = avanceOt(o), sinEnviar = enCola(o.id);
     const pill = o.estado === 'hecha' ? '<span class="pill p-ok">Hecha</span>' : h === t ? '<span class="pill p-w">Completa · sin enviar</span>'
       : h ? `<span class="pill p-w">En curso · ${h} de ${t}</span>` : '';
     return `<button class="card" data-a="abrir-ot" data-id="${esc(o.id)}" style="text-align:left;width:100%;cursor:pointer">
       <div class="t">${o.piso ? `<span class="piso">PISO ${esc(o.piso)}</span> · ` : ''}${esc(o.nombre)} ${ru.sem ? `<span class="pill p-i">${etiquetaFrec(ru)}</span>` : ''} ${pill}</div>
-      <div class="m">${esc(o.semanaTxt)} · ${t} equipo${t === 1 ? '' : 's'}${sinEnviar ? ' · hay equipos sin enviar' : ''}</div>
+      <div class="m">${esc(o.semanaTxt)} · ${esc(tipoDe(o))} · ${t} equipo${t === 1 ? '' : 's'}${sinEnviar ? ' · hay equipos sin enviar' : ''}</div>
       ${(o.con || []).length ? `<div class="m">Con: <b>${esc(o.con.join(', '))}</b></div>` : ''}
       ${o.estado === 'hecha' ? '' : `<div class="prog"><i style="width:${t ? Math.round(h / t * 100) : 0}%"></i></div>`}</button>`;
   };
   const I = INST_TEC[enCarpeta];
   return barra(I ? I.ico + ' ' + I.nom : 'Hola, ' + E.sesion.nombre, 'Mis OT · ' + esc(E.tablet.ed), I ? '<button data-a="inst" data-k="">‹ Carpetas</button>' : '<button data-a="salir">Salir</button>') + `<main>${aviso()}
-  ${L.length ? L.map(card).join('') : `<div class="aviso p-ok">✔ ${I ? 'Todo hecho en ' + I.nom + '.' : 'No tenés OT por hacer.'} Las nuevas aparecen solas cuando hay señal.</div>`}
+  ${filtros}${L.length ? L.map(card).join('') : L0.length ? '<div class="aviso">No hay OT con ese tipo o piso.</div>' : `<div class="aviso p-ok">✔ ${I ? 'Todo hecho en ' + I.nom + '.' : 'No tenés OT por hacer.'} Las nuevas aparecen solas cuando hay señal.</div>`}
   <p class="o">Datos del ${E.cat.bajado ? fmtD(E.cat.bajado) + ' ' + E.cat.bajado.slice(11, 16) : '–'} · abrí la app con señal al empezar la semana</p></main>`;
 }
 // Rutinas con salas (ej. tableros de ascensores del piso 28, en 3 salas): se recorre sala por sala, cada una con sus tableros.
@@ -1076,7 +1093,8 @@ document.addEventListener('click', async ev => {
   }
   if (a === 'usar-tarjeta'){ E.usarTarjeta = true; E.msg = ''; dibujar(); return; }
   if (a === 'usar-pin'){ E.usarTarjeta = false; E.msg = ''; dibujar(); return; }
-  if (a === 'inst'){ E.inst = t.dataset.k; dibujar(); window.scrollTo(0, 0); return; }
+  if (a === 'inst'){ E.inst = t.dataset.k; E.fTipo = ''; E.fPiso = ''; dibujar(); window.scrollTo(0, 0); return; }
+  if (a === 'tec-filtro-no'){ E.fTipo = ''; E.fPiso = ''; dibujar(); return; }
   if (a === 'abrir-ot'){ E.ot = { id: t.dataset.id, parte: 0, eq: 0 }; E.pantalla = 'ot'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'parte'){ E.ot.parte = +t.dataset.i; E.ot.eq = 0; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'equipo'){ E.ot.eq = +t.dataset.i; dibujar(); window.scrollTo(0, 0); return; }
@@ -1219,5 +1237,9 @@ setInterval(actualizarSola, 120000);
 })();
 window.__E = E; window.__app = { abrirControl, entrarConQR, dibujar, DB }; // para las pruebas
 })();
+document.addEventListener('change', e => { // técnico: ordenar y filtrar sus OT (por piso o por tipo)
+  const k = { 'tec-orden': 'orden', 'tec-tipo': 'fTipo', 'tec-piso': 'fPiso' }[e.target.id]; if (!k) return;
+  E[k] = e.target.value; dibujar();
+});
 </script>
 </body></html>
