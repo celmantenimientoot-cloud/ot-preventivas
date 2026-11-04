@@ -830,6 +830,23 @@ function vLoginTec(){
     <div class="tecl">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-a="tecla" data-n="${n}">${n}</button>`).join('')}<button data-a="usar-tarjeta">Tarjeta</button><button data-a="tecla" data-n="0">0</button><button data-a="borrar" aria-label="Borrar">⌫</button></div>`}
   </main>`;
 }
+// Lo que trae la OT además de lo mensual: A anual (naranja), S semestral (azul), E especial (amarillo), según el color del plan
+const RUT_TXT = { A: ['Anual', '#f6c48b', '#7a3e00'], S: ['Semestral', '#bcd4f2', '#1d3d66'], E: ['Especial', '#fbe58a', '#5c4a00'] };
+const rutPill = k => `<span class="pill" style="background:${RUT_TXT[k][1]};color:${RUT_TXT[k][2]}">${RUT_TXT[k][0]}</span>`;
+// Escaleras: cada una está pintada de un color y los técnicos la recuerdan por el color (JT, 04/11/2026)
+const ESC_COL = { 1: ['amarilla', '#f2c500', '#3d3200'], 2: ['gris', '#8f9599', '#ffffff'], 3: ['violeta', '#7e4fbf', '#ffffff'],
+  4: ['azul', '#2f6fd6', '#ffffff'], 5: ['roja', '#cf3434', '#ffffff'], 6: ['verde', '#2e9a4e', '#ffffff'] };
+function escalerasDe(txt){
+  const t = String(txt || ''), m = t.match(/escalera\s*(\d)/i), m2 = t.match(/ESC-?(\d(?:\/\d)*)/i);
+  return [...new Set((m ? [m[1]] : m2 ? m2[1].split('/') : []).map(Number).filter(n => ESC_COL[n]))];
+}
+const escPill = n => `<span class="pill" style="background:${ESC_COL[n][1]};color:${ESC_COL[n][2]}">Escalera ${n} · ${ESC_COL[n][0]}</span>`;
+function rutinasOt(o, ru){
+  const r = new Set(Object.values(o.tipos || {}).filter(t => RUT_TXT[t]));
+  if (o.anual) r.add('A');
+  if (ru && ru.sem && ru.def) r.add(etiquetaFrec(ru) === 'Anual' ? 'A' : 'S');
+  return ['A', 'S', 'E'].filter(k => r.has(k));
+}
 const etiquetaFrec = ru => ru.def.partes.every(p => p.secciones.every(s => s.items.every(it => it.frec >= 360))) ? 'Anual' : 'Semestral';
 // Carpetas por instalación: si el técnico tiene OT de más de una, primero elige la carpeta
 const INST_TEC = { termo: { nom: 'Termomecánica', ico: '❄️', col: '#2e5a88' }, elec: { nom: 'Eléctrico', ico: '⚡', col: '#b7791f' }, cas: { nom: 'CCTV/CAS · molinetes y portones', ico: '🚧', col: '#6b4fa0' }, otra: { nom: 'Otras', ico: '🔧', col: '#5a6b65' } };
@@ -853,24 +870,27 @@ function vInicioTec(){
   const pisoNum = o => { const t = String(o.piso || '').toUpperCase(); return /SS/.test(t) ? -parseInt(t) || -1 : /^PB/.test(t) ? 0 : parseFloat(t) || 999; };
   const tipos = [...new Set(L0.map(tipoDe))].sort((a, b) => a.localeCompare(b, 'es'));
   const pisos = [...new Set(L0.map(o => String(o.piso || '')).filter(Boolean))].sort((a, b) => pisoNum({ piso: a }) - pisoNum({ piso: b }));
+  const rutDe = o => rutinasOt(o, T_().rutinas[o.rutina]);
   if (E.fTipo && !tipos.includes(E.fTipo)) E.fTipo = '';
   if (E.fPiso && !pisos.includes(E.fPiso)) E.fPiso = '';
   const ord = E.orden || 'semana';
-  const L = L0.filter(o => (!E.fTipo || tipoDe(o) === E.fTipo) && (!E.fPiso || String(o.piso) === E.fPiso))
+  const L = L0.filter(o => (!E.fTipo || tipoDe(o) === E.fTipo) && (!E.fPiso || String(o.piso) === E.fPiso)
+      && (!E.fRut || (E.fRut === 'M' ? !rutDe(o).length : rutDe(o).includes(E.fRut))))
     .sort((a, b) => ord === 'piso' ? pisoNum(a) - pisoNum(b) || tipoDe(a).localeCompare(tipoDe(b), 'es')
       : ord === 'tipo' ? tipoDe(a).localeCompare(tipoDe(b), 'es') || pisoNum(a) - pisoNum(b)
       : (a.semana < b.semana ? -1 : a.semana > b.semana ? 1 : 0));
-  const filtros = L0.length > 1 ? `<div class="card" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px">
+  const filtros = L0.length > 1 ? `<div class="card" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px">
     <label class="f" style="margin:0">Ordenar<select id="tec-orden"><option value="semana" ${ord === 'semana' ? 'selected' : ''}>Semana</option><option value="piso" ${ord === 'piso' ? 'selected' : ''}>Piso</option><option value="tipo" ${ord === 'tipo' ? 'selected' : ''}>Tipo</option></select></label>
     <label class="f" style="margin:0">Tipo<select id="tec-tipo"><option value="">Todos</option>${tipos.map(x => `<option ${x === E.fTipo ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
-    <label class="f" style="margin:0">Piso<select id="tec-piso"><option value="">Todos</option>${pisos.map(x => `<option ${x === E.fPiso ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label></div>
-    ${E.fTipo || E.fPiso ? `<div class="m" style="margin:-4px 0 8px">Mostrando ${L.length} de ${L0.length} · <button class="lnk" data-a="tec-filtro-no" style="background:none;border:0;color:var(--ok);font:inherit;text-decoration:underline;padding:0">ver todas</button></div>` : ''}` : '';
+    <label class="f" style="margin:0">Piso<select id="tec-piso"><option value="">Todos</option>${pisos.map(x => `<option ${x === E.fPiso ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
+    <label class="f" style="margin:0">Rutina<select id="tec-rut">${[['', 'Todas'], ['A', 'Con anual'], ['S', 'Con semestral'], ['E', 'Con especial'], ['M', 'Solo mensual']].map(([v, t]) => `<option value="${v}" ${v === (E.fRut || '') ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
+    ${E.fTipo || E.fPiso || E.fRut ? `<div class="m" style="margin:-4px 0 8px">Mostrando ${L.length} de ${L0.length} · <button class="lnk" data-a="tec-filtro-no" style="background:none;border:0;color:var(--ok);font:inherit;text-decoration:underline;padding:0">ver todas</button></div>` : ''}` : '';
   const card = o => {
     const ru = T_().rutinas[o.rutina] || {}, [h, t] = avanceOt(o), sinEnviar = enCola(o.id);
     const pill = o.estado === 'hecha' ? '<span class="pill p-ok">Hecha</span>' : h === t ? '<span class="pill p-w">Completa · sin enviar</span>'
       : h ? `<span class="pill p-w">En curso · ${h} de ${t}</span>` : '';
     return `<button class="card" data-a="abrir-ot" data-id="${esc(o.id)}" style="text-align:left;width:100%;cursor:pointer">
-      <div class="t">${o.piso ? `<span class="piso">PISO ${esc(o.piso)}</span> · ` : ''}${esc(o.nombre)} ${ru.sem ? `<span class="pill p-i">${etiquetaFrec(ru)}</span>` : ''} ${pill}</div>
+      <div class="t">${o.piso ? `<span class="piso">PISO ${esc(o.piso)}</span> · ` : ''}${esc(o.nombre)} ${escalerasDe(o.nombre).map(escPill).join(' ')} ${rutinasOt(o, ru).map(rutPill).join(' ')} ${pill}</div>
       <div class="m">${esc(o.semanaTxt)} · ${esc(tipoDe(o))} · ${t} equipo${t === 1 ? '' : 's'}${sinEnviar ? ' · hay equipos sin enviar' : ''}</div>
       ${(o.con || []).length ? `<div class="m">Con: <b>${esc(o.con.join(', '))}</b></div>` : ''}
       ${o.estado === 'hecha' ? '' : `<div class="prog"><i style="width:${t ? Math.round(h / t * 100) : 0}%"></i></div>`}</button>`;
@@ -927,10 +947,15 @@ function vOt(){
   const listo = hE === nE;
   return barra((o.piso ? 'PISO ' + o.piso + ' · ' : '') + o.nombre, esc(o.semanaTxt), '<button data-a="inicio">Volver</button>') + `<main>
   ${o.estado === 'hecha' ? '<div class="aviso p-i">Esta OT ya está terminada. Si hay que corregir algo, avisá al supervisor.</div>' : ''}
+  ${escalerasDe(o.nombre).length ? `<div class="aviso" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${escalerasDe(o.nombre).map(escPill).join('')}</div>` : ''}
+  ${(() => { const R = rutinasOt(o, ru); if (!R.length || o.estado === 'hecha') return '';
+      const n = k => Object.values(o.tipos || {}).filter(t => t === k).length;
+      return `<div class="aviso p-w">Esta OT incluye rutina ${R.map(k => rutPill(k) + (n(k) ? ` en ${n(k)} equipo${n(k) === 1 ? '' : 's'}` : '')).join(' · ')}: además de lo mensual, aparecen esas tareas.</div>`; })()}
   ${(o.con || []).length && o.estado !== 'hecha' ? `<div class="aviso p-i">La compartís con <b>${esc(o.con.join(', '))}</b>. Repártanse los equipos: lo que guarda cada uno le aparece al otro cuando tiene señal.</div>` : ''}
   ${porSala || partes + equipos}
   <div class="card">${e.cod ? `<div class="cod-eq">${esc(e.cod)}</div>` : ''}
     ${e.den ? `<div class="den-eq">${esc(e.den)}</div>` : `<div class="t">${esc(e.nombre || e.cod)}</div>`}
+    ${RUT_TXT[(o.tipos || {})[c.parte + '|' + c.eq]] ? `<div class="m">Rutina de este equipo: ${rutPill((o.tipos || {})[c.parte + '|' + c.eq])}</div>` : ''}
     ${cerrado ? `<div class="m"><span class="pill p-ok">Guardado por ${esc(por)}</span></div>`
     : `<div class="m" id="ot-prog-m">${hE} de ${nE} tareas</div><div class="prog"><i id="ot-prog-i" style="width:${nE ? Math.round(hE / nE * 100) : 0}%"></i></div>`}</div>
   ${cerrado ? '<p class="o">Este equipo ya está guardado. Si hay que corregir algo, avisá al supervisor.</p>' : `<div class="grid2"><button class="btn" data-a="todo-ok">Marcar todo ✔</button><button class="btn" data-a="todo-borrar" ${hE ? '' : 'disabled'}>Desmarcar todo este equipo</button></div>
@@ -1094,7 +1119,7 @@ document.addEventListener('click', async ev => {
   if (a === 'usar-tarjeta'){ E.usarTarjeta = true; E.msg = ''; dibujar(); return; }
   if (a === 'usar-pin'){ E.usarTarjeta = false; E.msg = ''; dibujar(); return; }
   if (a === 'inst'){ E.inst = t.dataset.k; E.fTipo = ''; E.fPiso = ''; dibujar(); window.scrollTo(0, 0); return; }
-  if (a === 'tec-filtro-no'){ E.fTipo = ''; E.fPiso = ''; dibujar(); return; }
+  if (a === 'tec-filtro-no'){ E.fTipo = ''; E.fPiso = ''; E.fRut = ''; dibujar(); return; }
   if (a === 'abrir-ot'){ E.ot = { id: t.dataset.id, parte: 0, eq: 0 }; E.pantalla = 'ot'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'parte'){ E.ot.parte = +t.dataset.i; E.ot.eq = 0; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'equipo'){ E.ot.eq = +t.dataset.i; dibujar(); window.scrollTo(0, 0); return; }
@@ -1196,6 +1221,9 @@ document.addEventListener('change', ev => {
   const el = ev.target;
   if (el.dataset.tk && el.dataset.f === 'val') topeMed(el.dataset.tk, el.value);
   if (el.id === 'b-piso'){ E.bPiso = el.value; dibujar(); return; }
+  // Técnico: ordenar y filtrar sus OT (por piso, por tipo o por rutina anual / semestral / especial)
+  const kf = { 'tec-orden': 'orden', 'tec-tipo': 'fTipo', 'tec-piso': 'fPiso', 'tec-rut': 'fRut' }[el.id];
+  if (kf){ E[kf] = el.value; dibujar(); return; }
   if (el.id === 'l-bomb' && el.value){ E.bomberoPin = el.value; E.pin = ''; E.msg = ''; dibujar(); }
   if (el.id === 'c-foto') fotoElegida(el);
   if (el.id === 'sv-tipo'){ E.sv.tipo = el.value; dibujar(); }
@@ -1237,9 +1265,5 @@ setInterval(actualizarSola, 120000);
 })();
 window.__E = E; window.__app = { abrirControl, entrarConQR, dibujar, DB }; // para las pruebas
 })();
-document.addEventListener('change', e => { // técnico: ordenar y filtrar sus OT (por piso o por tipo)
-  const k = { 'tec-orden': 'orden', 'tec-tipo': 'fTipo', 'tec-piso': 'fPiso' }[e.target.id]; if (!k) return;
-  E[k] = e.target.value; dibujar();
-});
 </script>
 </body></html>
