@@ -1,6 +1,6 @@
 ﻿// Guarda la app en la tablet para que abra sin internet. Al cambiar algÃºn archivo, subir el nÃºmero de VERSION.
-const VERSION = 'otprev-29';
-const ARCHIVOS = ['./', 'index.html', 'manifest.webmanifest', 'icono.svg', 'icono-192.png', 'icono-512.png', 'planos/cel-4ss-cocheras.jpg'];
+const VERSION = 'otprev-30';
+const ARCHIVOS = ['./', 'index.html', 'manifest.webmanifest', 'icono.svg', 'icono-192.png', 'icono-512.png', 'planos/cel-4ss-cocheras.jpg', 'planos/cel-1ss-cocheras.jpg'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(ARCHIVOS)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {

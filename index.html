@@ -832,8 +832,8 @@ function vLoginTec(){
 }
 const etiquetaFrec = ru => ru.def.partes.every(p => p.secciones.every(s => s.items.every(it => it.frec >= 360))) ? 'Anual' : 'Semestral';
 // Carpetas por instalación: si el técnico tiene OT de más de una, primero elige la carpeta
-const INST_TEC = { termo: { nom: 'Termomecánica', ico: '❄️', col: '#2e5a88' }, elec: { nom: 'Eléctrico', ico: '⚡', col: '#b7791f' }, otra: { nom: 'Otras', ico: '🔧', col: '#5a6b65' } };
-const instOt = o => { const i = String((T_().rutinas[o.rutina] || {}).inst || '').toUpperCase(); return /^TERMOMEC/.test(i) || !i ? 'termo' : /^ELEC/.test(i) ? 'elec' : 'otra'; };
+const INST_TEC = { termo: { nom: 'Termomecánica', ico: '❄️', col: '#2e5a88' }, elec: { nom: 'Eléctrico', ico: '⚡', col: '#b7791f' }, cas: { nom: 'CCTV/CAS · molinetes y portones', ico: '🚧', col: '#6b4fa0' }, otra: { nom: 'Otras', ico: '🔧', col: '#5a6b65' } };
+const instOt = o => { const i = String((T_().rutinas[o.rutina] || {}).inst || '').toUpperCase(); return /^TERMOMEC/.test(i) || !i ? 'termo' : /^ELEC/.test(i) ? 'elec' : /CCTV|CAS/.test(i) ? 'cas' : 'otra'; };
 function vInicioTec(){
   const todas = T_().ots, insts = Object.keys(INST_TEC).filter(k => todas.some(o => instOt(o) === k));
   if (insts.length > 1 && !insts.includes(E.inst)) {
