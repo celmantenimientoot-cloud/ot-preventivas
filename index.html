@@ -509,7 +509,7 @@ async function guardarControl(){
     if (faltan.length){ E.msg = 'Falta responder: ' + faltan.map(x => x[1]).join(', ') + '.'; dibujar(); return; }
     if (hayNo && !c.obs.trim()){ E.msg = 'Hay un NO: escribí una observación corta.'; dibujar(); document.getElementById('c-obs').focus(); return; }
     if (c.cambio && c.reemplazo && !c.cambio.motivo){ E.msg = 'Elegí el motivo del reemplazo.'; dibujar(); return; }
-    if (c.cambio && !String(c.cambio.ident || '').trim()){ E.msg = 'Completá el ID nuevo o cancelá el cambio.'; dibujar(); return; }
+    if (c.cambio && c.reemplazo && !String(c.cambio.ident || '').trim()){ E.msg = 'Completá el ID nuevo o cancelá el cambio.'; dibujar(); return; }
   }
   if (c.cambio && c.reemplazo) c.cambio.retirado = Object.fromEntries(DATOS_EXT.map(k => [k, c.eq[k] || '']));
   const r = { uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: c.eq.tipo, pos: c.eq.pos,
@@ -711,6 +711,7 @@ function vControl(){
     ? [['ident', c.reemplazo ? 'ID del extintor NUEVO' : 'ID del extintor'], ['clase', 'Tipo (ABC, CO2…)'], ['peso', 'Peso (ej.: 5kg)'], ['vtoCarga', 'Vence la carga', 'date'], ['vtoPH', 'Vence la prueba hidráulica', 'date'], ['vtoExt', 'Vence el extintor', 'date']]
     : [['ident', c.reemplazo ? 'Código de la manga NUEVA' : 'Código de manga'], ['vtoManga', 'Vence la manga', 'date']];
   // Equipo de piso sin datos cargados (ID o vencimientos): se pide completarlos con la etiqueta
+  if (!c.reemplazo) camposCambio.unshift(['ubic', 'Ubicación (dónde está)']); // los bomberos corrigen lo que se relevó mal
   const faltanDatos = !esDep(e) && (EXT ? ['ident', 'vtoCarga', 'vtoPH'] : ['ident', 'vtoManga']).filter(k => !e[k]).length;
   const cabeza = barra((EXT ? 'Extintor ' : 'Nicho ') + e.pos, esc(e.piso) + ' · ' + esc(e.ubic), '<button data-a="cancelar">Cancelar</button>')
     + (c.fuera ? `<div class="aviso" style="margin:8px 12px 0;background:var(--info-soft);color:var(--info);border-radius:10px;padding:10px 12px">La recorrida de ${esc(String(E.cat.tipos[e.tipo] || '').toLowerCase())} está en espera: usalo solo para <b>reemplazar el equipo</b> (vencido, despresurizado…) o <b>cambiar la manga</b>. No cuenta para la recorrida.</div>` : '');
@@ -1154,7 +1155,7 @@ document.addEventListener('click', async ev => {
   if (a === 'todo-si'){ rutDe(E.control.eq).forEach(([k]) => { E.control.resp[k] = 'SI'; }); dibujar(); return; }
   if (a === 'cambio'){ const e = E.control.eq; E.control.reemplazo = t.dataset.r === '1';
     E.control.cambio = Object.assign({ reemplazo: E.control.reemplazo, ident: '', motivo: t.dataset.motivo || '' },
-      E.control.reemplazo ? {} : Object.fromEntries((e.tipo === 'EXT' ? DATOS_EXT : ['ident', 'vtoManga']).map(k => [k, e[k] || ''])));
+      E.control.reemplazo ? {} : Object.fromEntries(['ubic'].concat(e.tipo === 'EXT' ? DATOS_EXT : ['ident', 'vtoManga']).map(k => [k, e[k] || ''])));
     dibujar(); return; }
   if (a === 'vacio'){ E.control.vacio = true; E.msg = ''; dibujar(); return; }
   if (a === 'vacio-no'){ E.control.vacio = false; dibujar(); return; }
