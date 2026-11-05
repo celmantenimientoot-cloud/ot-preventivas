@@ -220,15 +220,29 @@ function pararCamara(){
   clearInterval(CAM.timer); CAM.timer = null;
   if (CAM.stream){ CAM.stream.getTracks().forEach(t => t.stop()); CAM.stream = null; }
 }
+let _jsqr = null;
+function cargarJsQR(){
+  if (window.jsQR) return Promise.resolve();
+  return _jsqr || (_jsqr = new Promise((ok, mal) => { const sc = document.createElement('script'); sc.src = 'jsQR.js'; sc.onload = ok; sc.onerror = () => { _jsqr = null; mal(new Error('no se pudo cargar el lector de QR')); }; document.head.appendChild(sc); }));
+}
 async function iniciarCamara(alLeer){
   pararCamara();
   const gen = CAM.gen, v0 = document.getElementById('video'), aviso = document.getElementById('cam-aviso');
   if (!v0) return;
-  if (!('BarcodeDetector' in window)){ aviso.textContent = 'Esta tablet no lee QR desde el navegador. Usá "Buscar sin QR".'; return; }
   CAM.abriendo = true;
   let stream = null;
   try {
-    const det = new BarcodeDetector({ formats: ['qr_code'] });
+    // Lector del navegador (Chrome en Android); si no hay (Safari del iPhone), jsQR sobre la imagen de la cámara
+    let det = null;
+    if ('BarcodeDetector' in window) det = new BarcodeDetector({ formats: ['qr_code'] });
+    else {
+      await cargarJsQR();
+      const cv = document.createElement('canvas'), g = cv.getContext('2d', { willReadFrequently: true });
+      det = { detect: async el => { const w = el.videoWidth, h = el.videoHeight; if (!w || !h) return [];
+        const k = Math.min(1, 800 / Math.max(w, h)); cv.width = Math.round(w * k); cv.height = Math.round(h * k);
+        g.drawImage(el, 0, 0, cv.width, cv.height); const im = g.getImageData(0, 0, cv.width, cv.height);
+        const r = window.jsQR(im.data, cv.width, cv.height, { inversionAttempts: 'dontInvert' }); return r ? [{ rawValue: r.data }] : []; } };
+    }
     // Más resolución y enfoque continuo (si la cámara lo permite): el QR se toma más fácil y de más lejos
     stream = await navigator.mediaDevices.getUserMedia({ audio: false,
       video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 }, advanced: [{ focusMode: 'continuous' }] } });
@@ -814,16 +828,19 @@ async function vincularTec(cuerpo){
   try {
     const j = await enviar(Object.assign({ op: 'vincular_tec' }, cuerpo));
     E.tablet = j.tablet; await DB.set('tablet', E.tablet);
-    await guardarCatalogo(await enviar(conClave({ op: 'bajar' })));
+    await guardarCatalogo(j.termo ? j : await enviar(conClave({ op: 'bajar' }))); // el servidor nuevo ya manda las OT
     const b = E.cat.bomberos[0];
     if (b) iniciarSesion(b); else { E.pantalla = 'login'; dibujar(); }
     toast('Celular vinculado');
   } catch(e){ E.msg = e.message; dibujar(); }
 }
+const esIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const enInicio = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+const avisoIOS = () => esIOS() && !enInicio() ? '<div class="aviso p-i">En iPhone: tocá <b>Compartir</b> (el cuadrado con la flecha) › <b>Agregar a pantalla de inicio</b> y abrí la app siempre desde ese ícono. Así no te pide vincular de nuevo y entra más rápido.</div>' : '';
 function vLoginTec(){
   const b = (E.cat.bomberos || [])[0];
   if (!b) return barra('OT preventivas', esc(E.tablet.nombre)) + `<main><div class="aviso err">Tu acceso está dado de baja o todavía no llegó. Avisá al supervisor. Lo que no se envió sigue guardado.</div></main>`;
-  return barra('OT preventivas', esc(E.tablet.nombre)) + `<main>${aviso()}
+  return barra('OT preventivas', esc(E.tablet.nombre)) + `<main>${aviso()}${avisoIOS()}
   ${E.usarTarjeta ? `<div class="cam"><video id="video" playsinline muted></video><div class="marco"></div><span id="cam-aviso">Escaneá tu tarjeta</span></div>
     <button class="btn" data-a="usar-pin">Entrar con mi PIN</button>`
   : `<h2>${esc(b.nombre)}: tu PIN</h2>
