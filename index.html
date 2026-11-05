@@ -1113,9 +1113,38 @@ function irAlSiguiente(o, ru, c, msg){
   E.msg = ''; dibujar(); window.scrollTo(0, 0); sincronizar();
 }
 
+/* ---------- QR del equipo (05/11/2026): al escanear la etiqueta se abre la app con ?q=<id> y muestra su historial ---------- */
+const HQ = { cargando: false, datos: null, err: '' };
+async function cargarHistorial(){
+  HQ.cargando = true; HQ.err = ''; HQ.datos = null; dibujar();
+  try { HQ.datos = await enviar(conClave({ op: 'historial', q: E.qr })); }
+  catch(e){ HQ.err = navigator.onLine === false ? 'Necesitás señal para ver el historial del equipo.' : String(e.message || e).replace(/^.*?:\s*/, ''); }
+  HQ.cargando = false; if (E.pantalla === 'historial') dibujar();
+}
+function vHistorial(){
+  const D = HQ.datos, q = D && D.equipo;
+  const top = barra(q ? q.nombre : 'Historial del equipo', q ? esc(q.cod) + (q.piso ? ' · piso ' + esc(q.piso) : '') : 'Equipo ' + esc(E.qr || ''), '<button data-a="hq-salir">Volver</button>');
+  if (HQ.cargando) return top + '<main><p class="o">Buscando el historial del equipo…</p></main>';
+  if (HQ.err) return top + `<main><div class="aviso">${esc(HQ.err)}</div><button class="btn" data-a="hq-reintentar" style="width:100%">Reintentar</button></main>`;
+  if (!D) return top + '<main></main>';
+  const ab = D.correctivos.filter(o => !o.hecha), ce = D.correctivos.filter(o => o.hecha);
+  const corr = o => `<div class="card" style="padding:10px"><div class="t" style="font-size:15px">OT ${esc(o.ot)} ${o.hecha ? '<span class="pill p-ok">Cerrada</span>' : '<span class="pill p-w">Abierta</span>'}${o.nivel ? ` <span class="pill">${esc(o.nivel)}</span>` : ''}</div>
+    <div class="m">${esc(o.fecha)}${o.hecha && o.cierre ? ' → cerrada ' + esc(o.cierre) : ''}${o.tec ? ' · ' + esc(o.tec) : ''}</div>
+    <div style="margin-top:4px">${esc(o.desc)}</div>${o.descTec ? `<div class="m" style="margin-top:4px"><b>Qué se hizo:</b> ${esc(o.descTec)}</div>` : ''}</div>`;
+  const prev = p => `<div class="card" style="padding:10px"><div class="t" style="font-size:15px">${esc(fmtD(p.fecha))} · ${esc(p.tec || '')} ${p.sinAcceso ? '<span class="pill p-b">Sin acceso</span>' : p.mal.length ? `<span class="pill p-b">${p.mal.length} con ✖</span>` : '<span class="pill p-ok">Todo ✔</span>'}</div>
+    <div class="m">${esc(p.semana || '')}${p.rutina ? ' · ' + esc(p.rutina) : ''}</div>
+    ${p.mal.length ? `<div style="margin-top:4px">${p.mal.map(x => '✖ ' + esc(x)).join('<br>')}</div>` : ''}${p.obs ? `<div class="m" style="margin-top:4px"><b>Obs.:</b> ${esc(p.obs)}</div>` : ''}
+    ${p.pdf ? `<a class="btn" href="${esc(p.pdf)}" target="_blank" rel="noopener" style="margin-top:6px;display:inline-block">Ver PDF de la OT</a>` : ''}</div>`;
+  return top + `<main>
+    <div class="sec">Correctivos abiertos (${ab.length})</div>${ab.map(corr).join('') || '<p class="o">No hay OT correctivas abiertas.</p>'}
+    <div class="sec">Correctivos cerrados (${ce.length})</div>${ce.map(corr).join('') || '<p class="o">No hay OT correctivas cerradas.</p>'}
+    <div class="sec">Últimos preventivos (${D.preventivos.length})</div>${D.preventivos.map(prev).join('') || '<p class="o">Todavía no hay preventivos cargados desde el celular.</p>'}
+    <p class="o">Las OT correctivas se buscan por el código y por cómo se suele escribir el equipo en la OT.</p></main>`;
+}
 function dibujar(){
   const app = document.getElementById('app'), antes = E.pantallaDibujada;
-  const v = { vincular: vVincular, 'vincular-tec': vVincularTec, login: vLogin, inicio: vInicio, superv: vSuperv, entregar: vEntregar, escanear: vEscanear, buscar: vBuscar, control: vControl, ot: vOt }[E.pantalla];
+  if (E.qr && E.pantalla === 'inicio' && E.sesion){ if (esTec()){ E.pantalla = 'historial'; setTimeout(cargarHistorial, 0); } else { E.qr = null; E.msg = 'Ese QR es para la app de los técnicos (celular).'; } }
+  const v = { vincular: vVincular, 'vincular-tec': vVincularTec, login: vLogin, inicio: vInicio, superv: vSuperv, historial: vHistorial, entregar: vEntregar, escanear: vEscanear, buscar: vBuscar, control: vControl, ot: vOt }[E.pantalla];
   if (!v){ app.innerHTML = '<main><p class="o">Cargando…</p></main>'; return; }
   // No redibujar mientras se escribe en un campo de texto (se perdería el foco)
   const foco = document.activeElement && document.activeElement.id;
@@ -1189,6 +1218,8 @@ document.addEventListener('click', async ev => {
     guardarBorrador(); dibujar(); return;
   }
   if (a === 'guardar-eq'){ guardarEquipo(); return; }
+  if (a === 'hq-salir'){ E.qr = null; HQ.datos = null; E.pantalla = 'inicio'; dibujar(); return; }
+  if (a === 'hq-reintentar'){ cargarHistorial(); return; }
   if (a === 'sin-acceso'){ sinAccesoEquipo(); return; }
   if (a === 'tecla'){ if (esTec() && E.cat.bomberos[0]) E.bomberoPin = E.cat.bomberos[0].id; if (E.pin.length < 4) E.pin += t.dataset.n; E.msg = ''; dibujar(); if (E.pin.length === 4) entrarConPin(); return; }
   if (a === 'borrar'){ E.pin = E.pin.slice(0, -1); dibujar(); return; }
@@ -1287,6 +1318,7 @@ setInterval(actualizarSola, 120000);
 /* ---------- arranque ---------- */
 (async () => {
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  try { const q = new URLSearchParams(location.search).get('q'); if (q){ E.qr = q.slice(0, 20); history.replaceState(null, '', location.pathname); } } catch(e){}
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); // que el navegador no borre lo guardado
   E.tablet = await DB.get('tablet') || null;
   E.cat = await DB.get('catalogo') || null;
@@ -1299,7 +1331,7 @@ setInterval(actualizarSola, 120000);
   dibujar();
   sincronizar().then(bajar).then(dibujar);
 })();
-window.__E = E; window.__app = { abrirControl, entrarConQR, dibujar, DB }; // para las pruebas
+window.__E = E; window.__app = { abrirControl, entrarConQR, dibujar, DB, cargarHistorial }; // para las pruebas
 })();
 </script>
 </body></html>
