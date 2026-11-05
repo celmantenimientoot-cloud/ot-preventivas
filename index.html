@@ -785,6 +785,7 @@ const borrador = id => (E.borr[id] = E.borr[id] || { resp: {}, obs: '' });
 function guardadoPor(ot, pi, ei){
   if ((ot.hechos || {})[pi + '|' + ei]) return ot.hechos[pi + '|' + ei];
   const pre = pi + '|' + ei + '|';
+  if (E.cola.some(r => r.tipo === 'TERMO' && r.otsem === ot.id && r.sinAcceso && r.sinAcceso.parte === pi && r.sinAcceso.eq === ei)) return 'SIN ACCESO (sin enviar)';
   return E.cola.some(r => r.tipo === 'TERMO' && r.otsem === ot.id && Object.keys(r.resp || {}).some(k => k.startsWith(pre))) ? 'vos (sin enviar)' : '';
 }
 function avanceOt(ot){
@@ -956,16 +957,18 @@ function vOt(){
   <div class="card">${e.cod ? `<div class="cod-eq">${esc(e.cod)}</div>` : ''}
     ${e.den ? `<div class="den-eq">${esc(e.den)}</div>` : `<div class="t">${esc(e.nombre || e.cod)}</div>`}
     ${RUT_TXT[(o.tipos || {})[c.parte + '|' + c.eq]] ? `<div class="m">Rutina de este equipo: ${rutPill((o.tipos || {})[c.parte + '|' + c.eq])}</div>` : ''}
-    ${cerrado ? `<div class="m"><span class="pill p-ok">Guardado por ${esc(por)}</span></div>`
+    ${cerrado && /^SIN ACCESO/.test(por) ? `<div class="m"><span class="pill p-b">🚫 Sin acceso${/sin enviar/.test(por) ? ' · sin enviar' : ''}</span></div>`
+    : cerrado ? `<div class="m"><span class="pill p-ok">Guardado por ${esc(por)}</span></div>`
     : `<div class="m" id="ot-prog-m">${hE} de ${nE} tareas</div><div class="prog"><i id="ot-prog-i" style="width:${nE ? Math.round(hE / nE * 100) : 0}%"></i></div>`}</div>
-  ${cerrado ? '<p class="o">Este equipo ya está guardado. Si hay que corregir algo, avisá al supervisor.</p>' : `<div class="grid2"><button class="btn" data-a="todo-ok">Marcar todo ✔</button><button class="btn" data-a="todo-borrar" ${hE ? '' : 'disabled'}>Desmarcar todo este equipo</button></div>
+  ${cerrado && /^SIN ACCESO/.test(por) ? '<p class="o">Quedó sin realizar porque no hubo acceso. Cuando el supervisor coordine el acceso, te lo devuelve y aparece de nuevo para hacerlo.</p>'
+    : cerrado ? '<p class="o">Este equipo ya está guardado. Si hay que corregir algo, avisá al supervisor.</p>' : `<div class="grid2"><button class="btn" data-a="todo-ok">Marcar todo ✔</button><button class="btn" data-a="todo-borrar" ${hE ? '' : 'disabled'}>Desmarcar todo este equipo</button></div>
     <p class="m" style="margin:0">Para desmarcar una sola tarea, tocá de nuevo el ✔, la ✖ o N/A. <b>N/A = no aplica</b>: esa tarea no existe en este equipo (por ejemplo, no tiene segundo motor). No va como problema: el supervisor la saca de la rutina.</p>`}
   <div>${html}</div>
   ${anuales.length && !cerrado ? `<details><summary class="m">${anuales.length} tareas anuales: no se hacen esta semana</summary>${anuales.map(it => `<div class="it2 m">${esc(it.t)}</div>`).join('')}</details>` : ''}
-  ${o.estado === 'hecha' ? '' : e.noPlan ? `<label class="f">Observación de esta sala (opcional, va solo con esta sala)<textarea id="eq-obs" rows="2" maxlength="500">${esc((b.obsEq || {})[c.parte + '|' + c.eq] || '')}</textarea></label>`
-    : `<label class="f">Observación general de la OT (opcional, va con cada equipo que guardes)<textarea id="ot-obs" rows="2" maxlength="500">${esc(b.obs)}</textarea></label>`}
+  ${o.estado === 'hecha' || cerrado ? '' : `<label class="f">Observación de ${e.noPlan ? 'esta sala (opcional, va solo con esta sala)' : 'este equipo (opcional, va solo con este equipo)'}<textarea id="eq-obs" rows="2" maxlength="500">${esc((b.obsEq || {})[c.parte + '|' + c.eq] || '')}</textarea></label>`}
   ${aviso()}
-  ${cerrado ? '' : `<button class="big" id="ot-guardar" data-a="guardar-eq" ${listo ? '' : 'disabled'}>${listo ? 'GUARDAR ESTE EQUIPO' : `Guardar este equipo (faltan ${nE - hE} tareas)`}</button>`}
+  ${cerrado ? '' : `<button class="big" id="ot-guardar" data-a="guardar-eq" ${listo ? '' : 'disabled'}>${listo ? 'GUARDAR ESTE EQUIPO' : `Guardar este equipo (faltan ${nE - hE} tareas)`}</button>
+    <button class="btn" data-a="sin-acceso" style="width:100%;margin-top:8px">🚫 Sin acceso a este equipo</button>`}
   <p class="o">${h} de ${t} equipos guardados · la OT se cierra sola cuando están todos</p></main>`;
 }
 /* ---------- plano (ej. ensayo de iluminación de cocheras): se toca cada punto y se elige cómo está ----------
@@ -1056,11 +1059,30 @@ async function guardarEquipo(){
     const k = claveT(c.parte, c.eq, it.id);
     if (it.plano && resp[k]) { try { img[k] = await planoMarcado(it, resp[k]); } catch(x){} }
   }
-  await DB.encolar({ uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: 'TERMO', otsem: o.id, resp, img, obs: String((p.equipos[c.eq] || {}).noPlan ? (b.obsEq || {})[c.parte + '|' + c.eq] || '' : b.obs || '').trim(), tec: E.sesion.id });
+  await DB.encolar({ uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: 'TERMO', otsem: o.id, resp, img, obs: String((b.obsEq || {})[c.parte + '|' + c.eq] || '').trim(), obsEq: true, tec: E.sesion.id });
   Object.keys(resp).forEach(k => { delete b.resp[k]; });
   if (b.obsEq) delete b.obsEq[c.parte + '|' + c.eq];
   await DB.set('borradores', E.borr);
   E.cola = await DB.cola();
+  irAlSiguiente(o, ru, c, nNo ? 'Equipo guardado · ' + nNo + ' con observación van al supervisor' : 'Equipo guardado');
+}
+// Sin acceso (05/11/2026): no se pudo entrar a la sala. El equipo queda sin realizar y se cierra para el técnico;
+// va a la bandeja del supervisor, que se lo devuelve cuando coordina el acceso.
+async function sinAccesoEquipo(){
+  const c = E.ot, o = T_().ots.find(x => x.id === c.id), ru = T_().rutinas[o.rutina], e = ru.def.partes[c.parte].equipos[c.eq];
+  const m = prompt('¿Por qué no pudiste acceder a ' + (e.cod || e.nombre) + '? (obligatorio)\nEj.: sala del inquilino cerrada, pedir permiso');
+  if (m === null) return;
+  if (m.trim().length < 3){ toast('Escribí el motivo para que el supervisor pueda coordinar el acceso.'); return; }
+  const b = borrador(o.id), pre = c.parte + '|' + c.eq + '|';
+  await DB.encolar({ uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: 'TERMO', otsem: o.id, resp: {},
+    sinAcceso: { parte: c.parte, eq: c.eq, motivo: m.trim().slice(0, 300) }, tec: E.sesion.id });
+  Object.keys(b.resp).forEach(k => { if (k.startsWith(pre)) delete b.resp[k]; });
+  if (b.obsEq) delete b.obsEq[c.parte + '|' + c.eq];
+  await DB.set('borradores', E.borr);
+  E.cola = await DB.cola();
+  irAlSiguiente(o, ru, c, 'Sin acceso: va al supervisor para coordinar');
+}
+function irAlSiguiente(o, ru, c, msg){
   // El siguiente equipo que falte (primero en este grupo, después en los otros)
   let sig = null;
   const g = salasDe(ru);
@@ -1073,7 +1095,7 @@ async function guardarEquipo(){
   ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!sig && !guardadoPor(o, pi, ei) && (pi > c.parte || (pi === c.parte && ei > c.eq))) sig = [pi, ei]; }));
   ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!sig && !guardadoPor(o, pi, ei)) sig = [pi, ei]; }));
   const [h, t] = avanceOt(o);
-  toast((nNo ? 'Equipo guardado · ' + nNo + ' con observación van al supervisor' : 'Equipo guardado') + (h === t ? ' · OT completa' : ''));
+  toast(msg + (h === t ? ' · OT completa' : ''));
   if (sig){ c.parte = sig[0]; c.eq = sig[1]; } else { E.ot = null; E.pantalla = 'inicio'; }
   E.msg = ''; dibujar(); window.scrollTo(0, 0); sincronizar();
 }
@@ -1154,6 +1176,7 @@ document.addEventListener('click', async ev => {
     guardarBorrador(); dibujar(); return;
   }
   if (a === 'guardar-eq'){ guardarEquipo(); return; }
+  if (a === 'sin-acceso'){ sinAccesoEquipo(); return; }
   if (a === 'tecla'){ if (esTec() && E.cat.bomberos[0]) E.bomberoPin = E.cat.bomberos[0].id; if (E.pin.length < 4) E.pin += t.dataset.n; E.msg = ''; dibujar(); if (E.pin.length === 4) entrarConPin(); return; }
   if (a === 'borrar'){ E.pin = E.pin.slice(0, -1); dibujar(); return; }
   if (a === 'pin-volver'){ E.bomberoPin = ''; E.pin = ''; E.msg = ''; dibujar(); return; }
