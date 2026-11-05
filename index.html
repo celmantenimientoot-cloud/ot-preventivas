@@ -1028,6 +1028,11 @@ function topeMed(k, val){
   guardarBorrador(); dibujar();
 }
 function cerrarPt(){ document.querySelectorAll('.pt-pop').forEach(x => x.remove()); }
+// Dónde van la fecha y el técnico en el cuadro de cada plano (píxeles de la imagen original, 2400 de ancho)
+const CAMPOS_PLANO = {
+  'planos/cel-1ss-cocheras.jpg': { fecha: [1752, 377], tec: [1772, 449] },
+  'planos/cel-4ss-cocheras.jpg': { fecha: [1764, 412], tec: [1794, 484] }
+};
 // Para el PDF: el plano con las marcas, armado en el celular (también sin señal)
 async function planoMarcado(it, v){
   const img = await new Promise((ok, mal) => { const im = new Image(); im.onload = () => ok(im); im.onerror = mal; im.src = it.plano.img; });
@@ -1038,6 +1043,14 @@ async function planoMarcado(it, v){
   it.plano.pts.forEach((q, i) => { const m = (v.pts || {})[i]; if (!m) return;
     g.beginPath(); g.arc(q[1] * z, q[2] * z, 17, 0, 2 * Math.PI); g.fillStyle = m === 'ok' ? '#15803d' : '#c0392b'; g.fill();
     g.fillStyle = '#fff'; g.fillText(m === 'ok' ? '✓' : m === 'sf' ? 'X' : m, q[1] * z, q[2] * z + 1); });
+  // Cuadro del plano: FECHA y TÉCNICO se completan solos (el registro se sube a SharePoint y tiene que tenerlos)
+  const cp = CAMPOS_PLANO[it.plano.img];
+  if (cp){
+    const d = new Date(), fecha = String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+    g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = '#0b3d91'; g.font = 'bold ' + Math.round(34 * z) + 'px sans-serif';
+    g.fillText(fecha, cp.fecha[0] * z, cp.fecha[1] * z);
+    g.fillText(String((E.sesion && E.sesion.nombre) || '').slice(0, 40), cp.tec[0] * z, cp.tec[1] * z);
+  }
   return cv.toDataURL('image/jpeg', 0.7);
 }
 // Al escribir una medición: se actualiza el avance sin redibujar (para no perder el campo)
