@@ -935,12 +935,16 @@ function salasDe(ru){
 }
 // Título como en el plan (06/11/2026): "código · denominación" de la fila del plan, tal como lo leen en la planilla.
 // Varios equipos del plan con la misma denominación: esa. Sin vínculo con el plan (o denominaciones distintas): el nombre de la rutina.
+const comunPlan = L => { const W = L.map(x => String(x).split(/\s+/)), out = [];
+  for (let i = 0; i < W[0].length; i++) { const w = W[0][i]; if (W.every(x => (x[i] || '').toLowerCase() === w.toLowerCase())) out.push(w); else break; }
+  while (out.length && /^(de|del|la|el|los|las|y|a|en|N°|Nº|nro\.?)$/i.test(out[out.length - 1])) out.pop();
+  return out.length >= 2 ? out.join(' ') : ''; };
 function titPlan(def, nom){
   const E = []; ((def && def.partes) || []).forEach(p => (p.equipos || []).forEach(e => { if (!e.noPlan && e.fila) E.push(e); }));
   if (!E.length) return nom || '';
   if (E.length === 1) return [E[0].cod, E[0].den || E[0].nombre].filter(Boolean).join(' · ');
   const dens = [...new Set(E.map(e => e.den || e.nombre))];
-  return dens.length === 1 ? dens[0] : nom || '';
+  return dens.length === 1 ? dens[0] : comunPlan(dens) || nom || '';
 }
 const otNum = (def => { const L = []; ((def && def.partes) || []).forEach(p => (p.equipos || []).forEach(e => { const n = String(e.otn || '').trim(); if (!e.noPlan && n && L.indexOf(n) < 0) L.push(n); }));
   L.sort((a, b) => a.localeCompare(b, 'es', { numeric: true })); return L.length > 2 ? L[0] + ' a ' + L[L.length - 1] : L.join(' y '); }); // N.º de OT del plan
