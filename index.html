@@ -911,7 +911,7 @@ function vInicioTec(){
     const pill = o.estado === 'hecha' ? '<span class="pill p-ok">Hecha</span>' : h === t ? '<span class="pill p-w">Completa · sin enviar</span>'
       : h ? `<span class="pill p-w">En curso · ${h} de ${t}</span>` : '';
     return `<button class="card" data-a="abrir-ot" data-id="${esc(o.id)}" style="text-align:left;width:100%;cursor:pointer">
-      <div class="t">${o.piso ? `<span class="piso">PISO ${esc(o.piso)}</span> · ` : ''}${otNum(ru.def) ? '<b>OT ' + esc(otNum(ru.def)) + '</b> · ' : ''}${esc(o.nombre)} ${escalerasDe(o.nombre).map(escPill).join(' ')} ${rutinasOt(o, ru).map(rutPill).join(' ')} ${pill}</div>
+      <div class="t">${o.piso ? `<span class="piso">PISO ${esc(o.piso)}</span> · ` : ''}${otNum(ru.def) ? '<b>OT N° ' + esc(otNum(ru.def)) + '</b> · ' : ''}${esc(titPlan(ru.def, o.nombre))} ${escalerasDe(o.nombre).map(escPill).join(' ')} ${rutinasOt(o, ru).map(rutPill).join(' ')} ${pill}</div>
       <div class="m">${esc(o.semanaTxt)} · ${esc(tipoDe(o))} · ${t} equipo${t === 1 ? '' : 's'}${sinEnviar ? ' · hay equipos sin enviar' : ''}</div>
       ${(o.con || []).length ? `<div class="m">Con: <b>${esc(o.con.join(', '))}</b></div>` : ''}
       ${o.estado === 'hecha' ? '' : `<div class="prog"><i style="width:${t ? Math.round(h / t * 100) : 0}%"></i></div>`}</button>`;
@@ -932,6 +932,15 @@ function salasDe(ru){
     if (!(k in idx)){ idx[k] = S.length; S.push({ n: String(e.sala).trim(), eqs: [] }); } S[idx[k]].eqs.push([pi, ei]);
   }));
   return hay ? (sin ? S.concat([sin]) : S) : null;
+}
+// Título como en el plan (06/11/2026): "código · denominación" de la fila del plan, tal como lo leen en la planilla.
+// Varios equipos del plan con la misma denominación: esa. Sin vínculo con el plan (o denominaciones distintas): el nombre de la rutina.
+function titPlan(def, nom){
+  const E = []; ((def && def.partes) || []).forEach(p => (p.equipos || []).forEach(e => { if (!e.noPlan && e.fila) E.push(e); }));
+  if (!E.length) return nom || '';
+  if (E.length === 1) return [E[0].cod, E[0].den || E[0].nombre].filter(Boolean).join(' · ');
+  const dens = [...new Set(E.map(e => e.den || e.nombre))];
+  return dens.length === 1 ? dens[0] : nom || '';
 }
 const otNum = (def => { const L = []; ((def && def.partes) || []).forEach(p => (p.equipos || []).forEach(e => { const n = String(e.otn || '').trim(); if (!e.noPlan && n && L.indexOf(n) < 0) L.push(n); }));
   L.sort((a, b) => a.localeCompare(b, 'es', { numeric: true })); return L.length > 2 ? L[0] + ' a ' + L[L.length - 1] : L.join(' y '); }); // N.º de OT del plan
@@ -974,7 +983,7 @@ function vOt(){
   const exc = ((e || {}).excluir) || [], anuales = ru.sem || o.anual ? [] : p.secciones.flatMap(s => s.items).filter(it => it.frec >= 360 && exc.indexOf(it.id) < 0);
   const nE = p.secciones.reduce((n, s) => n + s.items.filter(toca).length, 0), hE = p.secciones.reduce((n, s) => n + s.items.filter(toca).filter(it => tareaLista(b.resp[claveT(c.parte, c.eq, it.id)], it)).length, 0);
   const listo = hE === nE;
-  return barra((o.piso ? 'PISO ' + o.piso + ' · ' : '') + (otNum(ru.def) ? 'OT ' + otNum(ru.def) + ' · ' : '') + o.nombre, esc(o.semanaTxt), '<button data-a="inicio">Volver</button>') + `<main>
+  return barra((o.piso ? 'PISO ' + o.piso + ' · ' : '') + (otNum(ru.def) ? 'OT N° ' + otNum(ru.def) + ' · ' : '') + titPlan(ru.def, o.nombre), esc(o.semanaTxt), '<button data-a="inicio">Volver</button>') + `<main>
   ${o.estado === 'hecha' ? '<div class="aviso p-i">Esta OT ya está terminada. Si hay que corregir algo, avisá al supervisor.</div>' : ''}
   ${escalerasDe(o.nombre).length ? `<div class="aviso" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${escalerasDe(o.nombre).map(escPill).join('')}</div>` : ''}
   ${(() => { const R = rutinasOt(o, ru); if (!R.length || o.estado === 'hecha') return '';
