@@ -1015,14 +1015,18 @@ function vOt(){
 /* ---------- plano (ej. ensayo de iluminación de cocheras): se toca cada punto y se elige cómo está ----------
    Códigos como en el plano de papel: ✓ OK · ☒ sin funcionar · 1 efecto estrobo · 2 suelta / mal calzada · 3 faltan piezas · 4 no instalado */
 const PT_COD = { ok: ['✓', 'OK'], sf: ['☒', 'Sin funcionar'], '1': ['1', 'Efecto estrobo'], '2': ['2', 'Suelta / mal calzada'], '3': ['3', 'Faltan piezas'], '4': ['4', 'No instalado'] };
+// Ensayo de tomacorrientes (10/11/2026): los códigos del plano de papel de tomacorrientes
+const PT_COD_TOMA = { ok: ['✓', 'Con tensión (P)'], q: ['☒', 'Sin tensión (Q)'], '1': ['1', 'Bastidor en mal estado'], '2': ['2', 'Sin acceso a bastidor'], '3': ['3', 'Cortocircuito'], '4': ['4', 'Fuga a masa'], '5': ['5', 'Faltan piezas del bastidor'] };
+const ptCods = it => it.plano && it.plano.tipo === 'toma' ? PT_COD_TOMA : PT_COD;
+const ptNom = (it, n) => it.plano && it.plano.tipo === 'toma' ? (n === 1 ? 'Tomacorriente' : 'tomacorrientes') : (n === 1 ? 'Luminaria' : 'luminarias');
 function ptResumen(it, v){
   const m = (v && v.pts) || {}, mal = {}; let ok = 0;
-  Object.keys(m).forEach(i => { if (m[i] === 'ok') ok++; else { const c = it.plano.pts[i][0]; (mal[c] = mal[c] || []).push(PT_COD[m[i]][1]); } });
+  Object.keys(m).forEach(i => { if (m[i] === 'ok') ok++; else { const c = it.plano.pts[i][0]; (mal[c] = mal[c] || []).push((ptCods(it)[m[i]] || ['', m[i]])[1]); } });
   const nMal = Object.keys(m).length - ok;
   return { ok, nMal, faltan: it.plano.pts.length - ok - nMal,
     obs: Object.keys(mal).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1))).map(c => c + ': ' + mal[c].join(', ')).join(' · ') };
 }
-function ptTxtResumen(it, v){ const z = ptResumen(it, v); return `${it.plano.pts.length} luminarias · <b>${z.ok}</b> OK · <b style="color:var(--bad)">${z.nMal}</b> con falla · ${z.faltan} sin marcar`; }
+function ptTxtResumen(it, v){ const z = ptResumen(it, v); return `${it.plano.pts.length} ${ptNom(it)} · <b>${z.ok}</b> OK · <b style="color:var(--bad)">${z.nMal}</b> con falla · ${z.faltan} sin marcar`; }
 function vPlano(it, k, v){
   const P = it.plano, zoom = E.planoZoom || 3;
   return `<div class="it2"><div><b>${esc(it.t)}</b>${it.nota ? `<br><span class="m">${esc(it.nota)}</span>` : ''}</div>
@@ -1030,11 +1034,11 @@ function vPlano(it, k, v){
     <div class="grid3"><button class="btn" data-a="pt-zoom" data-z="-1">Alejar −</button><button class="btn" data-a="pt-zoom" data-z="1">Acercar +</button><button class="btn" data-a="pt-full">⛶ Pantalla completa</button></div>
     <div class="pf-barra" id="pf-barra"><button data-a="pt-zoom" data-z="-1" aria-label="Alejar">−</button><button data-a="pt-zoom" data-z="1" aria-label="Acercar">+</button><span id="pf-res">${ptTxtResumen(it, v)}</span><button data-a="pt-full" class="sal">Salir</button></div>
     <div class="plano-w${E.planoFull ? ' full' : ''}" id="plano-w"><div class="plano" style="width:${zoom * 100}%"><img src="${esc(P.img)}" alt="Plano" draggable="false">
-      ${P.pts.map((q, i) => { const m = (v.pts || {})[i]; return `<button class="pt ${m === 'ok' ? 'ok' : m ? 'mal' : ''}" data-a="pt" data-k="${k}" data-i="${i}" style="left:${(q[1] / P.w * 100).toFixed(2)}%;top:${(q[2] / P.h * 100).toFixed(2)}%">${m ? PT_COD[m][0] : esc(q[0])}</button>`; }).join('')}
+      ${P.pts.map((q, i) => { const m = (v.pts || {})[i]; return `<button class="pt ${m === 'ok' ? 'ok' : m ? 'mal' : ''}" data-a="pt" data-k="${k}" data-i="${i}" style="left:${(q[1] / P.w * 100).toFixed(2)}%;top:${(q[2] / P.h * 100).toFixed(2)}%">${m ? ptCods(it)[m][0] : esc(q[0])}</button>`; }).join('')}
     </div></div>
     <p class="m" id="pt-res" style="margin:6px 0">${ptTxtResumen(it, v)}</p>
     <button class="btn" data-a="pt-todos" data-k="${k}">Marcar las que faltan como OK ✓</button>
-    <p class="m" style="margin:6px 0 0">✓ OK · ☒ Sin funcionar · 1 Efecto estrobo · 2 Suelta / mal calzada · 3 Faltan piezas · 4 No instalado</p></div>`;
+    <p class="m" style="margin:6px 0 0">${Object.values(ptCods(it)).map(c => c.join(' ')).join(' · ')}</p></div>`;
 }
 function ptTarea(k){ const o = T_().ots.find(x => x.id === E.ot.id), ru = T_().rutinas[o.rutina], id = k.split('|')[2]; return ru.def.partes[E.ot.parte].secciones.flatMap(s => s.items).find(x => x.id === id); }
 // Guarda la marca, arma la observación (las fallas por circuito) y actualiza la pantalla sin redibujar (no se pierde el lugar del plano)
@@ -1045,7 +1049,7 @@ function ptMarcar(k, i, val){
   if (z.nMal){ v.e = 'no'; v.obs = z.obs; } else { delete v.obs; if (!z.faltan) v.e = 'si'; else delete v.e; }
   guardarBorrador();
   const b = document.querySelector(`[data-a="pt"][data-k="${CSS.escape(k)}"][data-i="${i}"]`);
-  if (b){ const m = v.pts[i]; b.className = 'pt ' + (m === 'ok' ? 'ok' : m ? 'mal' : ''); b.textContent = m ? PT_COD[m][0] : it.plano.pts[i][0]; }
+  if (b){ const m = v.pts[i]; b.className = 'pt ' + (m === 'ok' ? 'ok' : m ? 'mal' : ''); b.textContent = m ? ptCods(it)[m][0] : it.plano.pts[i][0]; }
   const res = document.getElementById('pt-res'); if (res) res.innerHTML = ptTxtResumen(it, v);
   const res2 = document.getElementById('pf-res'); if (res2) res2.innerHTML = ptTxtResumen(it, v);
   actualizarProgresoOt();
@@ -1054,8 +1058,9 @@ function ptAbrir(k, i){
   cerrarPt();
   const it = ptTarea(k), v = (borrador(E.ot.id).resp[k] || {}), m = (v.pts || {})[i];
   const d = document.createElement('div'); d.className = 'pt-pop';
-  d.innerHTML = `<b>Luminaria ${esc(it.plano.pts[i][0])}</b>${m ? ` · ahora: ${PT_COD[m][1]}` : ''}
-    <div class="ops">${Object.keys(PT_COD).map(c => `<button data-a="pt-set" data-k="${k}" data-i="${i}" data-v="${c}" style="${c === 'ok' ? 'color:#15803d' : 'color:#c0392b'}">${PT_COD[c][0]} ${PT_COD[c][1]}</button>`).join('')}
+  const C = ptCods(it);
+  d.innerHTML = `<b>${ptNom(it, 1)} ${esc(it.plano.pts[i][0])}</b>${m ? ` · ahora: ${C[m][1]}` : ''}
+    <div class="ops">${Object.keys(C).map(c => `<button data-a="pt-set" data-k="${k}" data-i="${i}" data-v="${c}" style="${c === 'ok' ? 'color:#15803d' : 'color:#c0392b'}">${C[c][0]} ${C[c][1]}</button>`).join('')}
     <button data-a="pt-set" data-k="${k}" data-i="${i}" data-v="x">Borrar la marca</button><button data-a="pt-cerrar">Cancelar</button></div>`;
   document.body.appendChild(d);
 }
