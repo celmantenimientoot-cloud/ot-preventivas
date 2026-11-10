@@ -56,6 +56,11 @@ label.f input,label.f select,label.f textarea{border:1px solid #b4c2bd;border-ra
 .foto{max-width:100%;max-height:180px;border-radius:9px}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#14201c;color:#fff;padding:11px 16px;border-radius:10px;font-size:15px;z-index:9;max-width:92vw}
 button.card{font:inherit;color:inherit}
+.hist-btn{display:flex;gap:12px;align-items:center;text-align:left;width:100%;cursor:pointer;border:2px solid var(--pri);background:var(--ok-soft)} .hist-btn .ico{font-size:26px}
+.h-eq{width:100%;margin:8px 0 2px;border-color:var(--pri);color:var(--pri);font-weight:600}
+.h-sug{display:flex;flex-direction:column;gap:4px} .h-sug:empty{display:none} .h-sug button{text-align:left;border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 12px;min-height:44px}
+.h-sug button small{display:block;color:var(--muted);font-size:12px} .h-ev{padding:10px 12px} .h-cab{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.h-lb{font-size:11px;color:var(--muted);margin-top:7px;text-transform:uppercase;letter-spacing:.3px} .h-quien{margin-top:8px}
 .chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;flex:none;max-width:100%;min-width:0}
 .chips button{flex:none;border:1px solid #b4c2bd;background:#fff;border-radius:18px;padding:6px 12px;min-height:40px;font-size:14px}
 .chips button[aria-pressed=true]{background:var(--pri);color:#fff;border-color:var(--pri)}
@@ -880,6 +885,7 @@ function vInicioTec(){
         <div class="t"><span class="ico">${I.ico}</span> ${I.nom}</div>
         <div class="m">${n ? `<b>${n}</b> OT por hacer` : '<span class="pill p-ok">✔ Todo hecho</span>'}</div></button>`; };
     return barra('Hola, ' + E.sesion.nombre, 'Mis OT · ' + esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + `<main>${aviso()}
+    <button class="card hist-btn" data-a="h-abrir"><span class="ico">🔎</span><div><div class="t" style="font-size:16px">Historial de equipos</div><div class="m">Correctivos y preventivos · buscá por piso, instalación o equipo</div></div></button>
     <h2 style="margin:4px 0 10px">Elegí la instalación</h2>${insts.map(carpeta).join('')}
     <p class="o">Datos del ${E.cat.bajado ? fmtD(E.cat.bajado) + ' ' + E.cat.bajado.slice(11, 16) : '–'} · abrí la app con señal al empezar la semana</p></main>`;
   }
@@ -918,7 +924,7 @@ function vInicioTec(){
   };
   const I = INST_TEC[enCarpeta];
   return barra(I ? I.ico + ' ' + I.nom : 'Hola, ' + E.sesion.nombre, 'Mis OT · ' + esc(E.tablet.ed), I ? '<button data-a="inst" data-k="">‹ Carpetas</button>' : '<button data-a="salir">Salir</button>') + `<main>${aviso()}
-  ${filtros}${L.length ? L.map(card).join('') : L0.length ? '<div class="aviso">No hay OT con ese tipo o piso.</div>' : `<div class="aviso p-ok">✔ ${I ? 'Todo hecho en ' + I.nom + '.' : 'No tenés OT por hacer.'} Las nuevas aparecen solas cuando hay señal.</div>`}
+  ${I ? '' : '<button class="card hist-btn" data-a="h-abrir"><span class="ico">🔎</span><div><div class="t" style="font-size:16px">Historial de equipos</div><div class="m">Correctivos y preventivos · buscá por piso, instalación o equipo</div></div></button>'}${filtros}${L.length ? L.map(card).join('') : L0.length ? '<div class="aviso">No hay OT con ese tipo o piso.</div>' : `<div class="aviso p-ok">✔ ${I ? 'Todo hecho en ' + I.nom + '.' : 'No tenés OT por hacer.'} Las nuevas aparecen solas cuando hay señal.</div>`}
   <p class="o">Datos del ${E.cat.bajado ? fmtD(E.cat.bajado) + ' ' + E.cat.bajado.slice(11, 16) : '–'} · abrí la app con señal al empezar la semana</p></main>`;
 }
 // Sala técnica (06/11/2026): cada equipo puede tener la sala técnica donde está ("código | nombre | sala técnica" en el
@@ -997,6 +1003,7 @@ function vOt(){
   ${porSala || partes + equipos}
   <div class="card">${salaAct ? `<div class="sala-eq">📍 ${esc(salaAct.n)}</div>` : ''}${e.cod ? `<div class="cod-eq">${esc(e.cod)}</div>` : ''}
     ${e.den ? `<div class="den-eq">${esc(e.den)}</div>` : `<div class="t">${esc(e.nombre || e.cod)}</div>`}
+    <button class="btn h-eq" data-a="h-equipo" data-q="${esc(e.cod || e.den || e.nombre || '')}" data-piso="${esc(o.piso || '')}">🔎 Ver historial de este equipo</button>
     ${RUT_TXT[(o.tipos || {})[c.parte + '|' + c.eq]] ? `<div class="m">Rutina de este equipo: ${rutPill((o.tipos || {})[c.parte + '|' + c.eq])}</div>` : ''}
     ${cerrado && /^SIN ACCESO/.test(por) ? `<div class="m"><span class="pill p-b">🚫 Sin acceso${/sin enviar/.test(por) ? ' · sin enviar' : ''}</span></div>`
     : cerrado ? `<div class="m"><span class="pill p-ok">Guardado por ${esc(por)}</span></div>`
@@ -1187,10 +1194,97 @@ function vHistorial(){
     <div class="sec">Últimos preventivos (${D.preventivos.length})</div>${D.preventivos.map(prev).join('') || '<p class="o">Todavía no hay preventivos cargados desde el celular.</p>'}
     <p class="o">Las OT correctivas se buscan por el código y por cómo se suele escribir el equipo en la OT.</p></main>`;
 }
+/* ---------- Historial de equipos (10/11/2026): filtros como en Gestión de OT + texto libre tolerante ----------
+   "UTA 26" encuentra UTA-26, UTA - 26, uta26 y CEL-12-AZ-UTA-26. Correctivos y preventivos por separado. Necesita señal. */
+const HB = { cat: null, cargando: false, err: '', res: null, buscando: false, vista: 'co', f: { ed: '', piso: '', inst: '', fam: '', sec: '', q: '', per: '2024', desde: '', hasta: '' } };
+const hTok = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/([A-Z])(\d)/g, '$1 $2').replace(/(\d)([A-Z])/g, '$1 $2')
+  .replace(/[^A-Z0-9]+/g, ' ').trim().split(' ').filter(Boolean).map(w => /^\d+$/.test(w) ? String(+w) : w);
+const hCoincide = (T, q) => q.every(w => /^\d+$/.test(w) ? T.includes(w) : T.some(x => x.startsWith(w)));
+const hPiso = s => hTok(s).filter(w => w !== 'PISO').join(' ');
+const hPisoNum = p => { const t = String(p || '').toUpperCase(); return /SS/.test(t) ? -(parseInt(t) || 1) : /PB/.test(t) ? 0 : parseFloat(t.replace(/\D+/g, ' ')) || 999; };
+function hRango(){ const f = HB.f, hoy = hoyIso();
+  if (f.per === 'f') return [f.desde, f.hasta];
+  if (f.per === '2024') return [HB.cat ? HB.cat.desde : '2024-01-01', hoy];
+  const d = new Date(hoy + 'T12:00:00'); d.setMonth(d.getMonth() - +f.per); return [d.toISOString().slice(0, 10), hoy]; }
+async function hCargarCat(){
+  HB.cargando = true; HB.err = ''; dibujar();
+  try { HB.cat = await enviar(conClave({ op: 'hist_cat' })); if (!HB.f.ed) HB.f.ed = HB.cat.ed || E.tablet.ed || ''; }
+  catch(e){ HB.err = navigator.onLine === false ? 'Necesitás señal para ver el historial.' : String(e.message || e).replace(/^.*?:\s*/, ''); }
+  HB.cargando = false; if (E.pantalla === 'hbuscar') dibujar();
+}
+async function hBuscar(){
+  const [desde, hasta] = hRango();
+  if (HB.f.per === 'f' && (!desde || !hasta || desde > hasta)){ HB.err = 'Revisá las fechas: "desde" tiene que ser anterior a "hasta".'; dibujar(); return; }
+  if (!HB.f.q.trim() && !HB.f.piso && !HB.f.inst){ HB.err = 'Elegí al menos el piso o la instalación, o escribí el equipo.'; dibujar(); return; }
+  HB.buscando = true; HB.err = ''; dibujar();
+  try { HB.res = await enviar(conClave({ op: 'hist_buscar', f: Object.assign({}, HB.f, { desde, hasta }) })); }
+  catch(e){ HB.err = navigator.onLine === false ? 'Necesitás señal para buscar.' : String(e.message || e).replace(/^.*?:\s*/, ''); }
+  HB.buscando = false; if (E.pantalla === 'hbuscar'){ dibujar(); const r = document.getElementById('h-res'); if (r && HB.res) r.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+}
+// Opciones de cada filtro: solo las combinaciones que existen con los filtros de antes (edificio › piso › instalación › familia › sector)
+function hOpciones(){
+  const C = (HB.cat && HB.cat.comb) || [], f = HB.f, uniq = L => [...new Set(L.filter(Boolean))];
+  const c1 = C.filter(x => !f.ed || x[0] === f.ed), c2 = c1.filter(x => !f.piso || hPiso(x[1]) === hPiso(f.piso)), c3 = c2.filter(x => !f.inst || x[2] === f.inst), c4 = c3.filter(x => !f.fam || x[3] === f.fam);
+  const pisos = {}; c1.forEach(x => { const k = hPiso(x[1]); if (k && !pisos[k]) pisos[k] = x[1]; });
+  return { ed: uniq(C.map(x => x[0])).sort(), piso: Object.values(pisos).sort((a, b) => hPisoNum(a) - hPisoNum(b)),
+    inst: uniq(c2.map(x => x[2])).sort((a, b) => a.localeCompare(b, 'es')), fam: uniq(c3.map(x => x[3])).sort((a, b) => a.localeCompare(b, 'es')), sec: uniq(c4.map(x => x[4])).sort((a, b) => a.localeCompare(b, 'es')) };
+}
+function hSugerencias(){
+  const q = hTok(HB.f.q), box = document.getElementById('h-sug'); if (!box) return;
+  if (!q.length || !HB.cat){ box.innerHTML = ''; return; }
+  const f = HB.f, vistos = {}, L = [];
+  for (const [ed, piso, n] of HB.cat.eqs){
+    if (f.ed && ed !== f.ed) continue; if (f.piso && hPiso(piso) !== hPiso(f.piso)) continue;
+    if (!hCoincide(hTok(n), q)) continue; const k = hTok(n).join(' '); if (vistos[k]) continue; vistos[k] = 1;
+    L.push([n, piso]); if (L.length >= 6) break;
+  }
+  box.innerHTML = L.map(([n, piso]) => `<button data-a="h-sug" data-v="${esc(n)}"><b>${esc(n)}</b>${piso ? `<small>Piso ${esc(piso)}</small>` : ''}</button>`).join('');
+}
+function vHBuscar(){
+  const top = barra('🔎 Historial de equipos', 'Correctivos y preventivos', `<button data-a="h-salir">${HB.volver === 'ot' ? '‹ A la OT' : 'Volver'}</button>`);
+  if (HB.cargando) return top + '<main><p class="o">Preparando los filtros…</p></main>';
+  if (!HB.cat) return top + `<main><div class="aviso">${esc(HB.err || 'Necesitás señal para ver el historial.')}</div><button class="btn" data-a="h-reintentar" style="width:100%">Reintentar</button></main>`;
+  const f = HB.f, O = hOpciones(), sel = (id, t, L, v, todos) => `<label class="f" style="margin:0">${t}<select id="${id}"><option value="">${todos}</option>${L.map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>`;
+  const [d1, d2] = hRango(), R = HB.res;
+  const per = [['3', 'Últimos 3 meses'], ['12', 'Últimos 12 meses'], ['2024', 'Desde 2024'], ['f', 'Elegir fechas']];
+  const campo = (t, v) => v ? `<div class="h-lb">${t}</div><div>${esc(v)}</div>` : '';
+  const corr = o => `<div class="card h-ev"><div class="h-cab"><b>${esc(fmtD(o.fecha))} · OT ${esc(o.ot)}</b><span class="pill ${/REALIZ/i.test(o.es) ? 'p-ok' : 'p-w'}">${esc(o.es || 'Abierta')}</span></div>
+    <div class="m">${esc([o.inst, o.fam, o.eq].filter(Boolean).join(' › '))}</div><div class="m">${esc([o.ed, o.piso ? (/^piso/i.test(o.piso) ? o.piso : 'Piso ' + o.piso) : '', o.sec].filter(Boolean).join(' · '))}</div>
+    <div style="margin-top:6px">${esc(o.d)}</div>${campo('Descripción adicional de la tarea', o.ad)}${campo('Descripción adicional del técnico', o.dt)}${campo('Observaciones', o.ob)}
+    <div class="m h-quien">${o.tec ? '👷 Hizo: <b>' + esc(o.tec) + '</b>' : ''}${o.cp ? ' · 🔒 Cerró: <b>' + esc(o.cp) + '</b>' + (o.fc ? ' ' + esc(fmtD(o.fc)) : '') : ''}</div></div>`;
+  const prev = p => `<div class="card h-ev"><div class="h-cab"><b>${esc(fmtD(p.fecha))}</b>${p.sinAcceso ? '<span class="pill p-b">Sin acceso</span>' : p.mal.length ? `<span class="pill p-b">✖ ${p.mal.length} con observación</span>` : '<span class="pill p-ok">✔ Sin observación</span>'}</div>
+    <div class="m">${p.otn ? 'OT N° ' + esc(p.otn) + ' · ' : ''}${esc(p.titulo)}${p.semana ? ' · ' + esc(p.semana) : ''}</div><div style="margin-top:4px"><b>${esc(p.eq)}</b>${p.cod && p.cod !== p.eq ? ' <span class="m">' + esc(p.cod) + '</span>' : ''}</div>
+    ${p.mal.length ? `<div style="margin-top:4px">${p.mal.map(x => '✖ ' + esc(x)).join('<br>')}</div>` : ''}${campo('Observación', p.obs)}
+    <div class="m h-quien">👷 Lo hizo: <b>${esc(p.tec || '')}</b></div>${p.pdf ? `<a class="btn" href="${esc(p.pdf)}" target="_blank" rel="noopener" style="margin-top:6px;display:inline-block">Ver PDF de la OT</a>` : ''}</div>`;
+  const lista = !R ? '' : HB.vista === 'co'
+    ? (R.correctivos.length ? R.correctivos.map(corr).join('') + (R.totalCorr > R.correctivos.length ? `<p class="o">Se muestran las ${R.correctivos.length} más nuevas de ${R.totalCorr}. Agregá un filtro para achicar.</p>` : '') : '<div class="aviso">No hay OT correctivas con esos filtros. Probá sacando alguno.</div>')
+    : (R.preventivos.length ? R.preventivos.map(prev).join('') : '<div class="aviso">No hay preventivos cargados desde el celular con esos filtros (existen desde octubre de 2026).</div>');
+  return top + `<main>
+    <div class="card" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px">
+      ${sel('h-ed', 'Edificio', O.ed, f.ed, 'Todos')}${sel('h-piso', 'Piso', O.piso, f.piso, 'Todos')}${sel('h-inst', 'Instalación', O.inst, f.inst, 'Todas')}${sel('h-fam', 'Familia', O.fam, f.fam, 'Todas')}
+      <div style="grid-column:1/-1">${sel('h-sec', 'Sector', O.sec, f.sec, 'Todos')}</div>
+      <label class="f" style="margin:0;grid-column:1/-1">Equipo o palabra<input type="search" id="h-q" value="${esc(f.q)}" placeholder="UTA 26, correa, sifón…" autocomplete="off" enterkeyhint="search"></label>
+      <div id="h-sug" class="h-sug" style="grid-column:1/-1"></div>
+      <div style="grid-column:1/-1"><div class="m" style="margin-bottom:4px">Período</div><div class="chips" style="flex-wrap:wrap">${per.map(([k, t]) => `<button data-a="h-per" data-k="${k}" aria-pressed="${f.per === k}">${t}</button>`).join('')}</div></div>
+      ${f.per === 'f' ? `<label class="f" style="margin:0">Desde<input type="date" id="h-d1" value="${esc(f.desde)}"></label><label class="f" style="margin:0">Hasta<input type="date" id="h-d2" value="${esc(f.hasta)}"></label>` : ''}
+      <button class="big" data-a="h-buscar" style="grid-column:1/-1" ${HB.buscando ? 'disabled' : ''}>${HB.buscando ? 'Buscando…' : '🔎 Buscar'}</button>
+    </div>
+    ${HB.err ? `<div class="aviso">${esc(HB.err)}</div>` : ''}
+    ${R ? `<div class="m" id="h-res">Del <b>${esc(fmtD(R.desde))}</b> al <b>${esc(fmtD(R.hasta))}</b></div>
+      <div class="chips"><button data-a="h-vista" data-k="co" aria-pressed="${HB.vista === 'co'}">Correctivos (${R.totalCorr})</button><button data-a="h-vista" data-k="pr" aria-pressed="${HB.vista === 'pr'}">Preventivos (${R.totalPrev})</button></div>${lista}` : ''}
+  </main>`;
+}
+document.addEventListener('change', ev => {
+  const id = ev.target.id, m = { 'h-ed': 'ed', 'h-piso': 'piso', 'h-inst': 'inst', 'h-fam': 'fam', 'h-sec': 'sec', 'h-d1': 'desde', 'h-d2': 'hasta' }[id]; if (!m) return;
+  HB.f[m] = ev.target.value; const orden = ['ed', 'piso', 'inst', 'fam', 'sec'], i = orden.indexOf(m); if (i >= 0) orden.slice(i + 1).forEach(k => { HB.f[k] = ''; }); // los de abajo vuelven a "Todos"
+  HB.err = ''; dibujar();
+});
+document.addEventListener('input', ev => { if (ev.target.id === 'h-q'){ HB.f.q = ev.target.value; hSugerencias(); } });
+document.addEventListener('keydown', ev => { if (ev.target.id === 'h-q' && ev.key === 'Enter'){ ev.preventDefault(); ev.target.blur(); document.getElementById('h-sug').innerHTML = ''; hBuscar(); } });
 function dibujar(){
   const app = document.getElementById('app'), antes = E.pantallaDibujada;
   if (E.qr && E.pantalla === 'inicio' && E.sesion){ if (esTec()){ E.pantalla = 'historial'; setTimeout(cargarHistorial, 0); } else { E.qr = null; E.msg = 'Ese QR es para la app de los técnicos (celular).'; } }
-  const v = { vincular: vVincular, 'vincular-tec': vVincularTec, login: vLogin, inicio: vInicio, superv: vSuperv, historial: vHistorial, entregar: vEntregar, escanear: vEscanear, buscar: vBuscar, control: vControl, ot: vOt }[E.pantalla];
+  const v = { vincular: vVincular, 'vincular-tec': vVincularTec, login: vLogin, inicio: vInicio, superv: vSuperv, historial: vHistorial, hbuscar: vHBuscar, entregar: vEntregar, escanear: vEscanear, buscar: vBuscar, control: vControl, ot: vOt }[E.pantalla];
   if (!v){ app.innerHTML = '<main><p class="o">Cargando…</p></main>'; return; }
   // No redibujar mientras se escribe en un campo de texto (se perdería el foco)
   const foco = document.activeElement && document.activeElement.id;
@@ -1264,6 +1358,19 @@ document.addEventListener('click', async ev => {
     guardarBorrador(); dibujar(); return;
   }
   if (a === 'guardar-eq'){ guardarEquipo(); return; }
+  if (a === 'h-abrir'){ E.pantalla = 'hbuscar'; HB.res = null; HB.err = ''; dibujar(); if (!HB.cat) hCargarCat(); return; }
+  if (a === 'h-salir'){ E.pantalla = HB.volver || 'inicio'; HB.volver = ''; dibujar(); return; }
+  if (a === 'h-equipo'){ // desde el equipo de la OT: el historial ya filtrado por ese equipo y su piso
+    Object.assign(HB.f, { ed: E.tablet.ed || '', piso: t.dataset.piso, inst: '', fam: '', sec: '', q: t.dataset.q, per: '2024' });
+    HB.volver = 'ot'; HB.res = null; HB.err = ''; HB.vista = 'co'; E.pantalla = 'hbuscar'; dibujar();
+    if (!HB.cat) await hCargarCat();
+    if (HB.cat){ const op = hOpciones().piso.find(x => hPiso(x) === hPiso(HB.f.piso)); HB.f.piso = op || ''; hBuscar(); }
+    return; }
+  if (a === 'h-reintentar'){ hCargarCat(); return; }
+  if (a === 'h-per'){ HB.f.per = t.dataset.k; if (t.dataset.k === 'f' && !HB.f.desde){ HB.f.desde = hoyIso().slice(0, 4) + '-01-01'; HB.f.hasta = hoyIso(); } HB.err = ''; dibujar(); return; }
+  if (a === 'h-vista'){ HB.vista = t.dataset.k; dibujar(); return; }
+  if (a === 'h-buscar'){ hBuscar(); return; }
+  if (a === 'h-sug'){ HB.f.q = t.dataset.v; const i = document.getElementById('h-q'); if (i) i.value = t.dataset.v; document.getElementById('h-sug').innerHTML = ''; hBuscar(); return; }
   if (a === 'hq-salir'){ E.qr = null; HQ.datos = null; E.pantalla = 'inicio'; dibujar(); return; }
   if (a === 'hq-reintentar'){ cargarHistorial(); return; }
   if (a === 'sin-acceso'){ sinAccesoEquipo(); return; }
