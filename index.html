@@ -887,7 +887,7 @@ function vInicioTec(){
     return barra('Hola, ' + E.sesion.nombre, 'Mis OT · ' + esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + `<main>${aviso()}
     <button class="card hist-btn" data-a="h-abrir"><span class="ico">🔎</span><div><div class="t" style="font-size:16px">Historial de equipos</div><div class="m">Correctivos y preventivos · buscá por piso, instalación o equipo</div></div></button>
     <h2 style="margin:4px 0 10px">Elegí la instalación</h2>${insts.map(carpeta).join('')}
-    <p class="o">Datos del ${E.cat.bajado ? fmtD(E.cat.bajado) + ' ' + E.cat.bajado.slice(11, 16) : '–'} · abrí la app con señal al empezar la semana</p></main>`;
+    ${pieLista()}</main>`;
   }
   const enCarpeta = insts.length > 1 ? E.inst : '';
   // Solo lo que falta: las OT hechas (ya recibidas por el sistema) no se muestran, para no confundir
@@ -925,7 +925,7 @@ function vInicioTec(){
   const I = INST_TEC[enCarpeta];
   return barra(I ? I.ico + ' ' + I.nom : 'Hola, ' + E.sesion.nombre, 'Mis OT · ' + esc(E.tablet.ed), I ? '<button data-a="inst" data-k="">‹ Carpetas</button>' : '<button data-a="salir">Salir</button>') + `<main>${aviso()}
   ${I ? '' : '<button class="card hist-btn" data-a="h-abrir"><span class="ico">🔎</span><div><div class="t" style="font-size:16px">Historial de equipos</div><div class="m">Correctivos y preventivos · buscá por piso, instalación o equipo</div></div></button>'}${filtros}${L.length ? L.map(card).join('') : L0.length ? '<div class="aviso">No hay OT con ese tipo o piso.</div>' : `<div class="aviso p-ok">✔ ${I ? 'Todo hecho en ' + I.nom + '.' : 'No tenés OT por hacer.'} Las nuevas aparecen solas cuando hay señal.</div>`}
-  <p class="o">Datos del ${E.cat.bajado ? fmtD(E.cat.bajado) + ' ' + E.cat.bajado.slice(11, 16) : '–'} · abrí la app con señal al empezar la semana</p></main>`;
+  ${pieLista()}</main>`;
 }
 // Sala técnica (06/11/2026): cada equipo puede tener la sala técnica donde está ("código | nombre | sala técnica" en el
 // sistema). Con salas técnicas el técnico recorre sala por sala y solo ve los equipos de la sala donde está: no se mezclan.
@@ -1464,6 +1464,9 @@ window.addEventListener('online', () => { E.online = true; dibujar(); actualizar
 window.addEventListener('offline', () => { E.online = false; dibujar(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') actualizarSola(); }); // al volver a abrir la app
 setInterval(() => { if (navigator.onLine && E.cola.length) sincronizar(); }, 60000);
+// Técnico en "Mis OT" con la app abierta (11/11/2026): la lista se baja sola cada 5 minutos. Antes solo al entrar o al
+// volver a la app, y una OT asignada mientras tanto (o de otra instalación: las carpetas) no aparecía hasta salir y entrar
+setInterval(() => { if (esTec() && E.sesion && E.pantalla === 'inicio' && document.visibilityState === 'visible') actualizarSola(); }, 5 * 60000);
 // Cada 2 minutos; si la tablet todavía no tiene bomberos, cada 20 segundos
 setInterval(() => { if (E.pantalla === 'login' && !(E.cat && E.cat.bomberos || []).length) actualizarSola(); }, 20000);
 setInterval(actualizarSola, 120000);
