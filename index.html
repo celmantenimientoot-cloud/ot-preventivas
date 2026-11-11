@@ -879,17 +879,19 @@ const INST_TEC = { termo: { nom: 'Termomecánica', ico: '❄️', col: '#2e5a88'
 const instOt = o => { const i = String((T_().rutinas[o.rutina] || {}).inst || '').toUpperCase(); return /^TERMOMEC/.test(i) || !i ? 'termo' : /^ELEC/.test(i) ? 'elec' : /CCTV|CAS/.test(i) ? 'cas' : /^SANIT/.test(i) ? 'sani' : /^COMBUST/.test(i) ? 'comb' : /^ASCENS/.test(i) ? 'asc' : 'otra'; };
 function vInicioTec(){
   const todas = T_().ots, insts = Object.keys(INST_TEC).filter(k => todas.some(o => instOt(o) === k));
-  if (insts.length > 1 && !insts.includes(E.inst)) {
+  // Carpetas siempre (11/11/2026, JT): aunque tenga OT de una sola instalación, primero la carpeta (antes, con una sola,
+  // iba directo a la lista y parecía que las carpetas habían desaparecido)
+  if (insts.length && !insts.includes(E.inst)) {
     const carpeta = k => { const n = todas.filter(o => instOt(o) === k && o.estado !== 'hecha').length, I = INST_TEC[k];
       return `<button class="card carpeta" data-a="inst" data-k="${k}" style="border-left:8px solid ${n ? I.col : '#2d8a4e'}">
         <div class="t"><span class="ico">${I.ico}</span> ${I.nom}</div>
-        <div class="m">${n ? `<b>${n}</b> OT por hacer` : '<span class="pill p-ok">✔ Todo hecho</span>'}</div></button>`; };
+        <div class="m">${n ? `<b>${n}</b> OT preventiva${n === 1 ? '' : 's'} por hacer` : '<span class="pill p-ok">✔ Todo hecho</span>'}</div></button>`; };
     return barra('Hola, ' + E.sesion.nombre, 'Mis OT · ' + esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + `<main>${aviso()}
     <button class="card hist-btn" data-a="h-abrir"><span class="ico">🔎</span><div><div class="t" style="font-size:16px">Historial de equipos</div><div class="m">Correctivos y preventivos · buscá por piso, instalación o equipo</div></div></button>
-    <h2 style="margin:4px 0 10px">Elegí la instalación</h2>${insts.map(carpeta).join('')}
+    <h2 style="margin:14px 0 2px">🗓️ Mantenimiento preventivo</h2><p class="m" style="margin:0 0 10px">Elegí la instalación</p>${insts.map(carpeta).join('')}
     ${pieLista()}</main>`;
   }
-  const enCarpeta = insts.length > 1 ? E.inst : '';
+  const enCarpeta = insts.length ? E.inst : '';
   // Solo lo que falta: las OT hechas (ya recibidas por el sistema) no se muestran, para no confundir
   const L0 = todas.filter(o => o.estado !== 'hecha' && (!enCarpeta || instOt(o) === enCarpeta));
   // Ordenar o filtrar por piso o por tipo (UPS, tablero seccional, blindobarra…): equipos de la misma sala se hacen juntos
@@ -923,7 +925,7 @@ function vInicioTec(){
       ${o.estado === 'hecha' ? '' : `<div class="prog"><i style="width:${t ? Math.round(h / t * 100) : 0}%"></i></div>`}</button>`;
   };
   const I = INST_TEC[enCarpeta];
-  return barra(I ? I.ico + ' ' + I.nom : 'Hola, ' + E.sesion.nombre, 'Mis OT · ' + esc(E.tablet.ed), I ? '<button data-a="inst" data-k="">‹ Carpetas</button>' : '<button data-a="salir">Salir</button>') + `<main>${aviso()}
+  return barra(I ? I.ico + ' ' + I.nom : 'Hola, ' + E.sesion.nombre, (I ? 'Mantenimiento preventivo · ' : 'Mis OT · ') + esc(E.tablet.ed), I ? '<button data-a="inst" data-k="">‹ Carpetas</button>' : '<button data-a="salir">Salir</button>') + `<main>${aviso()}
   ${I ? '' : '<button class="card hist-btn" data-a="h-abrir"><span class="ico">🔎</span><div><div class="t" style="font-size:16px">Historial de equipos</div><div class="m">Correctivos y preventivos · buscá por piso, instalación o equipo</div></div></button>'}${filtros}${L.length ? L.map(card).join('') : L0.length ? '<div class="aviso">No hay OT con ese tipo o piso.</div>' : `<div class="aviso p-ok">✔ ${I ? 'Todo hecho en ' + I.nom + '.' : 'No tenés OT por hacer.'} Las nuevas aparecen solas cuando hay señal.</div>`}
   ${pieLista()}</main>`;
 }
