@@ -804,7 +804,11 @@ function tareaLista(v, it){
 }
 const borrador = id => (E.borr[id] = E.borr[id] || { resp: {}, obs: '' });
 // Equipo guardado: ya está en el servidor (lo hizo él u otro técnico) o en la cola del celular sin enviar
+// Vínculo con el plan (ej. "Control general" de mochilas e inodoros): no se ve ni se carga, cuenta como hecho
+const esVinc = (ot, pi, ei) => { const ru = T_().rutinas[ot.rutina], p = ru && ru.def.partes[pi]; return !!(p && p.equipos[ei] && p.equipos[ei].vinculo); };
+const parteVinc = (ru, pi) => ru.def.partes[pi].equipos.every(e => e.vinculo);
 function guardadoPor(ot, pi, ei){
+  if (esVinc(ot, pi, ei)) return 'vínculo';
   if ((ot.hechos || {})[pi + '|' + ei]) return ot.hechos[pi + '|' + ei];
   const pre = pi + '|' + ei + '|';
   if (E.cola.some(r => r.tipo === 'TERMO' && r.otsem === ot.id && r.sinAcceso && r.sinAcceso.parte === pi && r.sinAcceso.eq === ei)) return 'SIN ACCESO (sin enviar)';
@@ -813,7 +817,7 @@ function guardadoPor(ot, pi, ei){
 function avanceOt(ot){
   const ru = T_().rutinas[ot.rutina]; if (!ru) return [0, 0];
   let h = 0, t = 0;
-  ru.def.partes.forEach((p, pi) => p.equipos.forEach((e, ei) => { t++; if (ot.estado === 'hecha' || guardadoPor(ot, pi, ei)) h++; }));
+  ru.def.partes.forEach((p, pi) => p.equipos.forEach((e, ei) => { if (e.vinculo) return; t++; if (ot.estado === 'hecha' || guardadoPor(ot, pi, ei)) h++; }));
   return [h, t];
 }
 const enCola = id => E.cola.some(r => r.tipo === 'TERMO' && r.otsem === id);
@@ -959,13 +963,14 @@ const otNum = (def => { const L = []; ((def && def.partes) || []).forEach(p => (
 function vOt(){
   const c = E.ot, o = T_().ots.find(x => x.id === c.id), ru = o && T_().rutinas[o.rutina];
   if (!o || !ru){ E.pantalla = 'inicio'; return vInicioTec(); }
+  if (esVinc(o, c.parte, c.eq)){ let s0 = null; ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!s0 && !x.vinculo) s0 = [pi, ei]; })); if (s0){ c.parte = s0[0]; c.eq = s0[1]; } }
   const b = borrador(o.id), toca = tocaEq(ru, o, c.parte, c.eq), p = ru.def.partes[c.parte], e = p.equipos[c.eq];
   const por = o.estado === 'hecha' ? (guardadoPor(o, c.parte, c.eq) || 'la OT ya está hecha') : guardadoPor(o, c.parte, c.eq), cerrado = !!por;
   const [h, t] = avanceOt(o), ab = T_().abiertas;
   // x: texto o [principal, aclaración] (equipos: el código del plan y abajo el nombre)
-  const chips = (L, sel, a, listo) => L.length > 1 ? `<div class="chips">${L.map((x, i) => `<button data-a="${a}" data-i="${i}" aria-pressed="${i === sel}" class="${listo(i) ? 'hecho' : ''}">${Array.isArray(x) ? esc(x[0]) + (x[1] ? `<small>${esc(x[1])}</small>` : '') : esc(x)}</button>`).join('')}</div>` : '';
-  const partes = chips(ru.def.partes.map(x => x.nombre || 'Equipos'), c.parte, 'parte', i => ru.def.partes[i].equipos.every((x, ei) => guardadoPor(o, i, ei)));
-  const equipos = chips(p.equipos.map(x => x.cod ? [x.cod, x.den || x.nombre] : [x.nombre]), c.eq, 'equipo', i => guardadoPor(o, c.parte, i));
+  const chips = (L, sel, a, listo) => L.filter(x => x != null).length > 1 ? `<div class="chips">${L.map((x, i) => x == null ? '' : `<button data-a="${a}" data-i="${i}" aria-pressed="${i === sel}" class="${listo(i) ? 'hecho' : ''}">${Array.isArray(x) ? esc(x[0]) + (x[1] ? `<small>${esc(x[1])}</small>` : '') : esc(x)}</button>`).join('')}</div>` : '';
+  const partes = chips(ru.def.partes.map((x, i) => parteVinc(ru, i) ? null : x.nombre || 'Equipos'), c.parte, 'parte', i => ru.def.partes[i].equipos.every((x, ei) => guardadoPor(o, i, ei)));
+  const equipos = chips(p.equipos.map(x => x.vinculo ? null : x.cod ? [x.cod, x.den || x.nombre] : [x.nombre]), c.eq, 'equipo', i => guardadoPor(o, c.parte, i));
   const g = salasDe(ru);
   let porSala = '', salaAct = null;
   if (g){ // 1) la sala técnica donde está · 2) solo los equipos de esa sala
