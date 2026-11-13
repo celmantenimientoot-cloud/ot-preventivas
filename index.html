@@ -198,8 +198,8 @@ async function guardarCatalogo(j){
 }
 function sinAcceso(e){
   if (!/TABLET_SIN_ACCESO/.test(e.message)) return false;
-  E.tablet = null; DB.del('tablet'); E.sesion = null; E.pantalla = 'vincular';
-  E.msg = esTec() ? 'Este celular quedó desvinculado. Volvé a vincularlo con tu tarjeta o tu PIN. Lo que no se envió sigue guardado.'
+  const eraCel = esTec(); E.tablet = null; DB.del('tablet'); E.sesion = null; E.pantalla = eraCel ? 'vincular-tec' : 'vincular';
+  E.msg = eraCel ? 'Este celular quedó desvinculado. Volvé a vincularlo con tu tarjeta o tu PIN. Lo que no se envió sigue guardado.'
     : 'Esta tablet quedó desvinculada. Pedile un código nuevo al supervisor. Lo que no se envió sigue guardado.';
   return true;
 }
@@ -618,14 +618,14 @@ const aviso = () => (E.msg ? `<div class="aviso err" role="alert">${esc(E.msg)}<
 // Pie de la pantalla de entrada: de cuándo es la lista y un botón para pedirla ya
 const pieLista = () => `<p class="o">Lista del ${E.cat && E.cat.bajado ? fmtD(E.cat.bajado) + ' ' + E.cat.bajado.slice(11, 16) : '–'} · <button class="btn" data-a="actualizar" style="display:inline-block;width:auto;min-height:36px;padding:0 12px" ${E.online ? '' : 'disabled'}>Actualizar lista</button></p>`;
 function vVincular(){
-  return `<div class="bar"><div class="t"><b>OT preventivas</b><small>Tablet sin vincular</small></div></div><main>
+  return `<div class="bar"><div class="t"><b>OT de mantenimiento</b><small>Tablet de bomberos</small></div><button data-a="vinc-tec">‹ Volver</button></div><main>
   <h2>Vincular esta tablet</h2>
   <p>Pedile al supervisor un código en el mini ERP (Mantenimiento preventivo › App de preventivos › Tablets) y escribilo acá. Se hace una sola vez y necesita señal.</p>
   ${aviso()}
   <label class="f">Código de 6 letras<input id="v-cod" maxlength="6" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase;font-size:24px;letter-spacing:4px;text-align:center"></label>
   <button class="big" data-a="vincular" ${E.online ? '' : 'disabled'}>${E.online ? 'VINCULAR' : 'Sin señal: buscá un lugar con internet'}</button>
-  <div class="o">— ¿Sos técnico y es tu celular? —</div>
-  <button class="big sec" data-a="vinc-tec">Soy técnico: vincular con mi tarjeta o PIN</button></main>`;
+  <div class="o">— ¿Sos técnico o supervisor? —</div>
+  <button class="big sec" data-a="vinc-tec">Entrar con mi tarjeta o mis iniciales y PIN</button></main>`;
 }
 function vLogin(){
   if (esTec()) return vLoginTec();
@@ -839,15 +839,16 @@ let borrT;
 function guardarBorrador(){ clearTimeout(borrT); borrT = setTimeout(() => DB.set('borradores', E.borr), 300); }
 
 function vVincularTec(){
-  return `<div class="bar"><div class="t"><b>OT preventivas</b><small>Vincular mi celular</small></div><button data-a="vinc-volver">Volver</button></div><main>
-  <h2>Soy técnico: vincular mi celular</h2>
-  <p>Escaneá tu tarjeta o escribí tus iniciales y tu PIN. Se hace una sola vez y necesita señal.</p>
+  return `<div class="bar"><div class="t"><b>OT de mantenimiento</b><small>Técnicos y supervisores</small></div></div><main>
+  <h2 style="font-size:24px;margin:6px 0 4px">Entrar</h2>
+  <p style="font-size:17px;margin:0 0 12px">Escaneá tu tarjeta o escribí tus iniciales y tu PIN. Se hace una sola vez en este celular y necesita señal.</p>
   ${aviso()}
-  <div class="cam"><video id="video" playsinline muted></video><div class="marco"></div><span id="cam-aviso">Escaneá tu tarjeta de técnico</span></div>
-  <div class="o">— o con tus iniciales y tu PIN —</div>
-  <div class="grid2"><label class="f">Iniciales<input id="vt-ini" maxlength="6" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase"></label>
-  <label class="f">PIN<input id="vt-pin" maxlength="4" inputmode="numeric" type="password" autocomplete="off"></label></div>
-  <button class="big" data-a="vincular-tec" ${E.online ? '' : 'disabled'}>${E.online ? 'VINCULAR' : 'Sin señal: buscá un lugar con internet'}</button></main>`;
+  <div class="grid2" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)"><label class="f" style="font-size:16px;min-width:0">Iniciales<input id="vt-ini" maxlength="6" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase;font-size:22px;text-align:center;width:100%;min-width:0;box-sizing:border-box"></label>
+  <label class="f" style="font-size:16px;min-width:0">PIN<input id="vt-pin" maxlength="4" inputmode="numeric" type="password" autocomplete="off" style="font-size:22px;text-align:center;width:100%;min-width:0;box-sizing:border-box"></label></div>
+  <button class="big" data-a="vincular-tec" style="margin-top:12px" ${E.online ? '' : 'disabled'}>${E.online ? 'ENTRAR' : 'Sin señal: buscá un lugar con internet'}</button>
+  <div class="o">— o con tu tarjeta —</div>
+  <div class="cam"><video id="video" playsinline muted></video><div class="marco"></div><span id="cam-aviso">Escaneá tu tarjeta</span></div>
+  <p class="o" style="margin-top:22px"><button data-a="vinc-tablet" style="background:none;border:0;color:var(--muted);text-decoration:underline;font:inherit;font-size:13px;cursor:pointer">¿Es una tablet de bomberos? Vincular con código</button></p></main>`;
 }
 async function vincularTec(cuerpo){
   E.msg = ''; dibujar();
@@ -865,8 +866,8 @@ const enInicio = () => (window.matchMedia && matchMedia('(display-mode: standalo
 const avisoIOS = () => esIOS() && !enInicio() ? '<div class="aviso p-i">En iPhone: tocá <b>Compartir</b> (el cuadrado con la flecha) › <b>Agregar a pantalla de inicio</b> y abrí la app siempre desde ese ícono. Así no te pide vincular de nuevo y entra más rápido.</div>' : '';
 function vLoginTec(){
   const b = (E.cat.bomberos || [])[0];
-  if (!b) return barra('OT preventivas', esc(E.tablet.nombre)) + `<main><div class="aviso err">Tu acceso está dado de baja o todavía no llegó. Avisá al supervisor. Lo que no se envió sigue guardado.</div></main>`;
-  return barra('OT preventivas', esc(E.tablet.nombre)) + `<main>${aviso()}${avisoIOS()}
+  if (!b) return barra('OT de mantenimiento', esc(E.tablet.nombre)) + `<main><div class="aviso err">Tu acceso está dado de baja o todavía no llegó. Avisá al supervisor. Lo que no se envió sigue guardado.</div></main>`;
+  return barra('OT de mantenimiento', esc(E.tablet.nombre)) + `<main>${aviso()}${avisoIOS()}
   ${E.usarTarjeta ? `<div class="cam"><video id="video" playsinline muted></video><div class="marco"></div><span id="cam-aviso">Escaneá tu tarjeta</span></div>
     <button class="btn" data-a="usar-pin">Entrar con mi PIN</button>`
   : `<h2>${esc(b.nombre)}: tu PIN</h2>
@@ -1333,14 +1334,14 @@ function vCorr(){
   ${L.length ? L.map(o => `<button class="card" data-a="corr-ot" data-ot="${esc(o.ot)}" style="text-align:left;width:100%;cursor:pointer">
     <div class="t"><b>OT ${esc(o.ot)}</b> ${critPill(o.crit)} ${pill(o)}${(o.con || []).length ? ` <span class="pill p-ok">Con ${esc(o.con.join(', '))}</span>` : ''}</div>
     <div style="margin:4px 0">${esc(o.desc)}</div>
-    <div class="m">${esc([o.ed, pisoTxt(o.piso), o.sector, o.eq].filter(Boolean).join(' · '))}</div></button>`).join('')
+    <div class="m">${esc([o.ed, pisoTxt(o.piso), o.sector, o.eq].filter(Boolean).join(' · '))}${o.est ? ' · estimado ' + o.est + ' min' : ''}</div></button>`).join('')
   : '<div class="aviso p-ok">✔ No tenés OT correctivas. Las nuevas aparecen solas cuando hay señal.</div>'}
   ${pieLista()}</main>`;
 }
 function vCorrOt(){
   const o = CORR().find(x => x.ot === E.corrOt);
   if (!o){ E.pantalla = 'corr'; return vCorr(); }
-  const est = corrEstado(o), foto = E.corrFoto[o.ot]; // al técnico no se le muestra nada del tiempo (JT: que no se sienta controlado)
+  const est = corrEstado(o), foto = E.corrFoto[o.ot]; // al técnico no se le muestra el tiempo que lleva (JT: que no se sienta controlado); sí el tiempo estimado que puso el supervisor
   const cuerpo = est === 'enviada' ? `<div class="aviso p-i">La terminaste: está en manos del supervisor, que la revisa y la cierra (o te la devuelve con un motivo).</div>`
   : est === 'nueva' || est === 'devuelta' ? `${est === 'devuelta' ? `<div class="aviso err"><b>Devuelta por el supervisor:</b> ${esc(o.st.motivo)}</div>` : ''}
     <button class="big" data-a="corr-empezar" style="background:var(--ok)">▶ Empezar el trabajo</button>
@@ -1355,7 +1356,7 @@ function vCorrOt(){
   return barra('OT ' + esc(o.ot), esc(o.ed), '<button data-a="corr-lista">‹ Correctivos</button>') + `<main>${aviso()}
   <div class="card"><div class="t" style="font-size:17px">${esc(o.desc)}</div>
     <div class="kv" style="margin-top:8px">${[['Criticidad', critPill(o.crit) || '–'], ['Instalación', esc([o.inst, o.fam].filter(Boolean).join(' › '))], ['Lugar', esc([pisoTxt(o.piso), o.sector].filter(Boolean).join(' · '))],
-      ['Equipo', esc(o.eq)], ['Tarea', esc(o.adic)], ['Con', esc((o.con || []).join(', '))], ['Entrada', esc(o.ent)]].filter(x => x[1]).map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div></div>
+      ['Equipo', esc(o.eq)], ['Tarea', esc(o.adic)], ['Con', esc((o.con || []).join(', '))], ['Tiempo estimado', o.est ? o.est + ' min' : ''], ['Entrada', esc(o.ent)]].filter(x => x[1]).map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div></div>
   ${cuerpo}</main>`;
 }
 async function corrEmpezar(){
@@ -1463,7 +1464,7 @@ document.addEventListener('click', async ev => {
     dibujar(); sincronizar(); return;
   }
   if (a === 'vinc-tec'){ E.pantalla = 'vincular-tec'; E.msg = ''; dibujar(); return; }
-  if (a === 'vinc-volver'){ E.pantalla = 'vincular'; E.msg = ''; dibujar(); return; }
+  if (a === 'vinc-volver' || a === 'vinc-tablet'){ E.pantalla = 'vincular'; E.msg = ''; dibujar(); return; }
   if (a === 'vincular-tec'){
     const ini = document.getElementById('vt-ini').value.trim().toUpperCase(), pin = document.getElementById('vt-pin').value.trim();
     if (!ini || pin.length !== 4){ E.msg = 'Escribí tus iniciales y tu PIN de 4 números.'; dibujar(); return; }
@@ -1643,7 +1644,7 @@ setInterval(actualizarSola, 120000);
   E.borr = await DB.get('borradores') || {};
   E.reloj = await DB.get('reloj') || {}; E.vistas = await DB.get('vistas') || {};
   try { E.sesion = JSON.parse(sessionStorage.getItem('sesion')); } catch(e){}
-  if (!E.tablet || !E.cat){ E.pantalla = 'vincular'; dibujar(); return; }
+  if (!E.tablet || !E.cat){ E.pantalla = E.tablet && E.tablet.tipo !== 'cel' ? 'vincular' : 'vincular-tec'; dibujar(); return; }
   if (E.sesion && !(E.cat.bomberos || []).some(b => b.id === E.sesion.id)) E.sesion = null;
   E.pantalla = E.sesion ? 'inicio' : 'login';
   dibujar();
