@@ -537,7 +537,7 @@ async function guardarControl(){
   const c = E.control, rut = rutDe(c.eq);
   const hayNo = !c.vacio && rut.some(([k]) => c.resp[k] === 'NO');
   if (!c.vacio){
-    const faltan = rut.filter(([k]) => !c.resp[k]);
+    const faltan = rut.filter(([k, , o]) => !c.resp[k] && !(o && o.opc)); // los opcionales se pueden dejar sin responder
     if (faltan.length){ E.msg = 'Falta responder: ' + faltan.map(x => x[1]).join(', ') + '.'; dibujar(); return; }
     if (c.cambio && c.reemplazo && !c.cambio.motivo){ E.msg = 'Elegí el motivo del reemplazo.'; dibujar(); return; }
     if (c.cambio && c.reemplazo && !String(c.cambio.ident || '').trim()){ E.msg = 'Completá el ID nuevo o cancelá el cambio.'; dibujar(); return; }
@@ -778,7 +778,7 @@ function vControl(){
       <div class="grid2"><button class="btn" data-a="cambio" data-r="1">${EXT ? 'Reemplazar extintor' : 'Cambiar manga'}</button><button class="btn" data-a="cambio" data-r="0">Corregir datos</button></div>
       <button class="btn" data-a="vacio">No hay equipo en esta posición</button>`}
   <h2>${c.reemplazo ? 'Estado del equipo nuevo' : 'Estado del ' + (EXT ? 'extintor' : 'nicho')} <span class="m" style="font-weight:400">(SÍ = está bien)</span></h2>
-  <div>${rut.map(([k, t]) => `<div class="it"><span>${esc(t)}</span><span class="sn" role="group" aria-label="${esc(t)}">
+  <div>${rut.map(([k, t, o]) => `<div class="it"><span>${esc(t)}${o && o.opc ? ' <span class="pill p-i">Opcional</span>' : ''}${o && o.ley ? `<br><span class="m" style="font-size:13px">${esc(o.ley)}</span>` : ''}</span><span class="sn" role="group" aria-label="${esc(t)}">
     <button class="si" data-a="resp" data-k="${k}" data-v="SI" aria-pressed="${c.resp[k] === 'SI'}">SÍ</button><button class="no" data-a="resp" data-k="${k}" data-v="NO" aria-pressed="${c.resp[k] === 'NO'}">NO</button></span></div>`).join('')}</div>
   <button class="btn" data-a="todo-si">Todo SÍ</button>
   <p class="m" style="margin:4px 0 0">Para desmarcar una respuesta, tocá de nuevo el mismo SÍ o NO.</p>
@@ -1573,7 +1573,7 @@ document.addEventListener('click', async ev => {
   if (a === 'resp'){ // tocar de nuevo la misma respuesta la desmarca
     const k = t.dataset.k; if (E.control.resp[k] === t.dataset.v) delete E.control.resp[k]; else E.control.resp[k] = t.dataset.v;
     E.msg = ''; dibujar(); return; }
-  if (a === 'todo-si'){ rutDe(E.control.eq).forEach(([k]) => { E.control.resp[k] = 'SI'; }); dibujar(); return; }
+  if (a === 'todo-si'){ rutDe(E.control.eq).forEach(([k, , o]) => { if (!(o && o.opc)) E.control.resp[k] = 'SI'; }); dibujar(); return; } // los opcionales se responden a mano
   if (a === 'cambio'){ const e = E.control.eq; E.control.reemplazo = t.dataset.r === '1';
     E.control.cambio = Object.assign({ reemplazo: E.control.reemplazo, ident: '', motivo: t.dataset.motivo || '' },
       E.control.reemplazo ? {} : Object.fromEntries(['ubic'].concat(e.tipo === 'EXT' ? DATOS_EXT : ['ident', 'vtoManga']).map(k => [k, e[k] || ''])));
