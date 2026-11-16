@@ -3,9 +3,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0e7666">
-<title>OT preventivas</title>
+<title>OT Mantenimiento</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icono.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icono-192.png">
+<meta name="apple-mobile-web-app-title" content="OT Mantenimiento">
 <style>
 :root{--pri:#0e7666;--pri-ink:#fff;--bg:#eef2f0;--card:#fff;--ink:#14201c;--muted:#4a5a55;--line:#d3dcd8;
   --ok:#0b5b45;--ok-soft:#d9f0e6;--warn:#7a3d00;--warn-soft:#fdebd6;--bad:#c0392b;--bad-ink:#7a1f14;--bad-soft:#fbe0dc;--info:#1f4f86;--info-soft:#e3ecf7}
@@ -64,6 +66,15 @@ label.f input,label.f select,label.f textarea{border:1px solid #b4c2bd;border-ra
 .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}.seg button{flex:1;min-height:44px;border:0;background:#fff}.seg button[aria-pressed=true]{background:var(--pri);color:#fff;font-weight:600}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .foto{max-width:100%;max-height:180px;border-radius:9px}
+.foto-min{display:block;width:100%;max-height:260px;object-fit:cover;border-radius:12px;margin-top:10px;cursor:zoom-in;background:#eef2f0}
+.foto-ley{font-size:13px;color:var(--muted);margin-top:4px}
+#visor{position:fixed;inset:0;z-index:50;background:#000;display:flex;flex-direction:column}
+#visor .vb{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top));color:#fff;font-size:15px}
+#visor .vb button{background:rgba(255,255,255,.16);color:#fff;border:0;border-radius:10px;font-size:17px;padding:10px 14px;margin-left:6px}
+#visor .vz{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;touch-action:pinch-zoom pan-x pan-y}
+#visor .vz img{max-width:100%;max-height:100%;object-fit:contain}
+#visor .vz.zoom{display:block}
+#visor .vz.zoom img{max-width:none;max-height:none;width:250%}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#14201c;color:#fff;padding:11px 16px;border-radius:10px;font-size:15px;z-index:9;max-width:92vw}
 button.card{font:inherit;color:inherit}
 .hist-btn{display:flex;gap:12px;align-items:center;text-align:left;width:100%;cursor:pointer;border:2px solid var(--pri);background:var(--ok-soft)} .hist-btn .ico{font-size:26px}
@@ -1408,6 +1419,24 @@ function vCorrSup(){
   : '<p class="m">No hay OT en curso.</p>'}
   ${pieLista()}</main>`;
 }
+// Foto dentro de la OT: chica, y al tocarla a pantalla completa con zoom (JT, 16/11/2026). Las de Drive se ven por su miniatura grande.
+const fotoSrc = u => { const id = (String(u || '').match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?id=)([-\w]{20,})/) || [])[1]; return id ? 'https://drive.google.com/thumbnail?id=' + id + '&sz=w2000' : String(u || ''); };
+const fotoMin = u => u ? `<img class="foto-min" src="${esc(fotoSrc(u))}" alt="Foto del técnico" data-a="foto-ver" data-src="${esc(fotoSrc(u))}" loading="lazy"><div class="foto-ley">👆 Tocá la foto para verla grande</div>` : '';
+function abrirVisor(src){
+  cerrarVisor(); const d = document.createElement('div'); d.id = 'visor';
+  d.innerHTML = `<div class="vb"><span>Foto</span><span><button data-a="visor-zoom">🔍 Acercar</button><button data-a="visor-cerrar">✕ Cerrar</button></span></div><div class="vz"><img src="${esc(src)}" alt="Foto"></div>`;
+  document.body.appendChild(d); history.pushState({ visor: 1 }, '');
+}
+function cerrarVisor(){ const d = document.getElementById('visor'); if (d) d.remove(); }
+// Botón "atrás" del celular (JT, 16/11/2026): primero cierra la foto; si no, hace lo mismo que el botón de volver de la barra
+// (‹ Carpetas, Volver, ‹ Supervisor…). Nunca "Salir" ni "Cancelar" (perdería lo cargado). En el inicio deja salir de la app.
+const ATRAS_OK = ['corr-lista', 'corr-volver', 'hq-salir', 'inicio', 'sup-lista', 'inst', 'h-salir'];
+const botonAtras = () => [...document.querySelectorAll('#app .bar button[data-a]')].find(b => ATRAS_OK.indexOf(b.dataset.a) >= 0 && (b.dataset.a !== 'inst' || !b.dataset.k));
+function atrasPreparar(){ try { if (botonAtras() && !(history.state && history.state.app)) history.pushState({ app: 1 }, ''); } catch (e) {} }
+window.addEventListener('popstate', () => {
+  if (document.getElementById('visor')){ cerrarVisor(); return; }
+  const b = botonAtras(); if (b){ b.click(); setTimeout(atrasPreparar, 0); }
+});
 function vCorrSupOt(){
   const o = (E.cat.corrCerrar || []).find(x => x.ot === E.supOt);
   if (!o){ E.pantalla = 'corrSup'; return vCorrSup(); }
@@ -1416,7 +1445,7 @@ function vCorrSupOt(){
   <div class="card"><div class="t" style="font-size:17px">${esc(o.desc)}</div><div class="m">${esc([o.ed, pisoTxt(o.piso), o.eq].filter(Boolean).join(' · '))} · ${critPill(o.crit)}</div></div>
   <div class="card"><div class="kv">${[['Técnico', esc(st.tec)], ['Tiempo', `<b>${st.min} min</b>${st.inicio ? ` · de ${esc(st.inicio.slice(11, 16))} a ${esc(String(st.fin).slice(11, 16))}` : ''}${st.pausas ? ` · ${st.pausas} pausa(s)` : ''}`],
     ['Estimado', o.est ? `${o.est} min ${d > 0 ? `<span class="pill p-w">+${d} min</span>` : '<span class="pill p-ok">dentro</span>'}` : '–'], ['Qué hizo', esc(st.com)]].map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>
-    ${st.foto ? `<p style="margin:8px 0 0"><a href="${esc(st.foto)}" target="_blank" rel="noopener">Ver la foto</a></p>` : ''}</div>
+    ${fotoMin(st.foto)}</div>
   <label class="f">Tiempo validado (min) · el sistema contó ${st.min} min<input id="sup-min" type="number" min="1" inputmode="numeric" value="${st.min}"></label>
   <button class="big" data-a="sup-cerrar" style="background:var(--ok)" ${E.online ? '' : 'disabled'}>Cerrar como realizada</button>
   <button class="btn" data-a="sup-relevante" style="width:100%;margin-top:8px" ${E.online ? '' : 'disabled'}>★ Cerrar y guardar como relevante</button>
@@ -1444,7 +1473,7 @@ function dibujar(){
   const foco = document.activeElement && document.activeElement.id;
   app.innerHTML = v();
   if (foco && document.getElementById(foco)){ const el = document.getElementById(foco); el.focus(); if (el.setSelectionRange && el.value != null) try { el.setSelectionRange(el.value.length, el.value.length); } catch(x){} }
-  E.pantallaDibujada = E.pantalla;
+  E.pantallaDibujada = E.pantalla; atrasPreparar();
   const camara = E.pantalla === 'escanear' || (E.pantalla === 'vincular-tec' && !E.vinculando) || (E.pantalla === 'login' && (esTec() ? E.usarTarjeta : !E.bomberoPin));
   if (!camara) pararCamara();
   else if ((!CAM.stream && !CAM.abriendo) || antes !== E.pantalla) iniciarCamara(E.pantalla === 'login' ? entrarConQR : E.pantalla === 'vincular-tec' ? txt => vincularTec({ qr: txt }) : txt => abrirControl(txt));
@@ -1455,6 +1484,9 @@ function dibujar(){
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('[data-a]'); if (!t) return;
   const a = t.dataset.a;
+  if (a === 'foto-ver'){ abrirVisor(t.dataset.src); return; }
+  if (a === 'visor-cerrar'){ if (history.state && history.state.visor) history.back(); else cerrarVisor(); return; }
+  if (a === 'visor-zoom'){ const z = document.querySelector('#visor .vz'); z.classList.toggle('zoom'); t.textContent = z.classList.contains('zoom') ? '🔍 Alejar' : '🔍 Acercar'; return; }
   if (a === 'vincular'){
     const cod = document.getElementById('v-cod').value.trim().toUpperCase();
     if (cod.length !== 6){ E.msg = 'El código tiene 6 letras.'; dibujar(); return; }
