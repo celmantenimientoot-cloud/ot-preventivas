@@ -1219,7 +1219,7 @@ function vHistorial(){
 }
 /* ---------- Historial de equipos (10/11/2026): filtros como en Gestión de OT + texto libre tolerante ----------
    "UTA 26" encuentra UTA-26, UTA - 26, uta26 y CEL-12-AZ-UTA-26. Correctivos y preventivos por separado. Necesita señal. */
-const HB = { cat: null, cargando: false, err: '', res: null, buscando: false, vista: 'co', f: { ed: '', piso: '', inst: '', fam: '', sec: '', q: '', per: '2024', desde: '', hasta: '' } };
+const HB = { cat: null, cargando: false, err: '', res: null, buscando: false, vista: 'co', f: { ed: '', piso: '', inst: '', fam: '', sec: '', q: '', per: '12', desde: '', hasta: '' } };
 const hTok = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/([A-Z])(\d)/g, '$1 $2').replace(/(\d)([A-Z])/g, '$1 $2')
   .replace(/[^A-Z0-9]+/g, ' ').trim().split(' ').filter(Boolean).map(w => /^\d+$/.test(w) ? String(+w) : w);
 const hCoincide = (T, q) => q.every(w => /^\d+$/.test(w) ? T.includes(w) : T.some(x => x.startsWith(w)));
@@ -1269,7 +1269,7 @@ function vHBuscar(){
   if (!HB.cat) return top + `<main><div class="aviso">${esc(HB.err || 'Necesitás señal para ver el historial.')}</div><button class="btn" data-a="h-reintentar" style="width:100%">Reintentar</button></main>`;
   const f = HB.f, O = hOpciones(), sel = (id, t, L, v, todos) => `<label class="f" style="margin:0">${t}<select id="${id}"><option value="">${todos}</option>${L.map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>`;
   const [d1, d2] = hRango(), R = HB.res;
-  const per = [['3', 'Últimos 3 meses'], ['12', 'Últimos 12 meses'], ['2024', 'Desde 2024'], ['f', 'Elegir fechas']];
+  const per = [['3', '3 meses'], ['12', '12 meses'], ['f', '📅 Fechas']]; // sin "Desde 2024" (JT, 16/11/2026): por defecto 12 meses
   const campo = (t, v) => v ? `<div class="h-lb">${t}</div><div>${esc(v)}</div>` : '';
   const corr = o => `<div class="card h-ev"><div class="h-cab"><b>${esc(fmtD(o.fecha))} · OT ${esc(o.ot)}</b><span class="pill ${/REALIZ/i.test(o.es) ? 'p-ok' : 'p-w'}">${esc(o.es || 'Abierta')}</span></div>
     <div class="m">${esc([o.inst, o.fam, o.eq].filter(Boolean).join(' › '))}</div><div class="m">${esc([o.ed, o.piso ? (/^piso/i.test(o.piso) ? o.piso : 'Piso ' + o.piso) : '', o.sec].filter(Boolean).join(' · '))}</div>
@@ -1284,12 +1284,12 @@ function vHBuscar(){
     : (R.preventivos.length ? R.preventivos.map(prev).join('') : '<div class="aviso">No hay preventivos cargados desde el celular con esos filtros (existen desde octubre de 2026).</div>');
   return top + `<main>
     <div class="card" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px">
+      <div style="grid-column:1/-1"><div class="m" style="margin-bottom:4px">Período</div><div class="chips" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${per.map(([k, t]) => `<button data-a="h-per" data-k="${k}" aria-pressed="${f.per === k}" style="width:100%;margin:0;padding-left:4px;padding-right:4px;white-space:nowrap;text-align:center">${t}</button>`).join('')}</div></div>
+      ${f.per === 'f' ? `<label class="f" style="margin:0">Desde<input type="date" id="h-d1" value="${esc(f.desde)}"></label><label class="f" style="margin:0">Hasta<input type="date" id="h-d2" value="${esc(f.hasta)}"></label>` : ''}
       ${sel('h-ed', 'Edificio', O.ed, f.ed, 'Todos')}${sel('h-piso', 'Piso', O.piso, f.piso, 'Todos')}${sel('h-inst', 'Instalación', O.inst, f.inst, 'Todas')}${sel('h-fam', 'Familia', O.fam, f.fam, 'Todas')}
       <div style="grid-column:1/-1">${sel('h-sec', 'Sector', O.sec, f.sec, 'Todos')}</div>
       <label class="f" style="margin:0;grid-column:1/-1">Equipo o palabra<input type="search" id="h-q" value="${esc(f.q)}" placeholder="UTA 26, correa, sifón…" autocomplete="off" enterkeyhint="search"></label>
       <div id="h-sug" class="h-sug" style="grid-column:1/-1"></div>
-      <div style="grid-column:1/-1"><div class="m" style="margin-bottom:4px">Período</div><div class="chips" style="flex-wrap:wrap">${per.map(([k, t]) => `<button data-a="h-per" data-k="${k}" aria-pressed="${f.per === k}">${t}</button>`).join('')}</div></div>
-      ${f.per === 'f' ? `<label class="f" style="margin:0">Desde<input type="date" id="h-d1" value="${esc(f.desde)}"></label><label class="f" style="margin:0">Hasta<input type="date" id="h-d2" value="${esc(f.hasta)}"></label>` : ''}
       <button class="big" data-a="h-buscar" style="grid-column:1/-1" ${HB.buscando ? 'disabled' : ''}>${HB.buscando ? 'Buscando…' : '🔎 Buscar'}</button>
     </div>
     ${HB.err ? `<div class="aviso">${esc(HB.err)}</div>` : ''}
@@ -1356,7 +1356,8 @@ function vCorrOt(){
   return barra('OT ' + esc(o.ot), esc(o.ed), '<button data-a="corr-lista">‹ Correctivos</button>') + `<main>${aviso()}
   <div class="card"><div class="t" style="font-size:17px">${esc(o.desc)}</div>
     <div class="kv" style="margin-top:8px">${[['Criticidad', critPill(o.crit) || '–'], ['Instalación', esc([o.inst, o.fam].filter(Boolean).join(' › '))], ['Lugar', esc([pisoTxt(o.piso), o.sector].filter(Boolean).join(' · '))],
-      ['Equipo', esc(o.eq)], ['Tarea', esc(o.adic)], ['Con', esc((o.con || []).join(', '))], ['Tiempo estimado', o.est ? o.est + ' min' : ''], ['Entrada', esc(o.ent)]].filter(x => x[1]).map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div></div>
+      ['Equipo', esc(o.eq)], ['Tarea', esc(o.adic)], ['Con', esc((o.con || []).join(', '))], ['Tiempo estimado', o.est ? o.est + ' min' : ''], ['Entrada', esc(o.ent)]].filter(x => x[1]).map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>
+    ${o.eq || o.piso ? `<button class="btn h-eq" data-a="h-equipo" data-q="${esc(o.eq || '')}" data-piso="${esc(o.piso || '')}" data-ed="${esc(o.ed || '')}" data-inst="${o.eq ? '' : esc(o.inst || '')}" data-volver="corrOt" style="margin-top:10px">🔎 Ver historial de ${o.eq ? 'este equipo' : 'este piso'}</button>` : ''}</div>
   ${cuerpo}</main>`;
 }
 async function corrEmpezar(){
@@ -1520,10 +1521,14 @@ document.addEventListener('click', async ev => {
   if (a === 'h-abrir'){ E.pantalla = 'hbuscar'; HB.res = null; HB.err = ''; dibujar(); if (!HB.cat) hCargarCat(); return; }
   if (a === 'h-salir'){ E.pantalla = HB.volver || 'inicio'; HB.volver = ''; dibujar(); return; }
   if (a === 'h-equipo'){ // desde el equipo de la OT: el historial ya filtrado por ese equipo y su piso
-    Object.assign(HB.f, { ed: E.tablet.ed || '', piso: t.dataset.piso, inst: '', fam: '', sec: '', q: t.dataset.q, per: '2024' });
-    HB.volver = 'ot'; HB.res = null; HB.err = ''; HB.vista = 'co'; E.pantalla = 'hbuscar'; dibujar();
+    Object.assign(HB.f, { ed: t.dataset.ed || E.tablet.ed || '', piso: t.dataset.piso, inst: '', fam: '', sec: '', q: t.dataset.q, per: '12' });
+    HB.volver = t.dataset.volver || 'ot'; HB.res = null; HB.err = ''; HB.vista = 'co'; E.pantalla = 'hbuscar'; dibujar();
     if (!HB.cat) await hCargarCat();
-    if (HB.cat){ const op = hOpciones().piso.find(x => hPiso(x) === hPiso(HB.f.piso)); HB.f.piso = op || ''; hBuscar(); }
+    if (HB.cat){ const op = hOpciones().piso.find(x => hPiso(x) === hPiso(HB.f.piso)); HB.f.piso = op || '';
+      // correctiva sin equipo: piso + su instalación (JT, 16/11/2026)
+      const n = x => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+      if (t.dataset.inst){ const oi = hOpciones().inst.find(x => n(x) === n(t.dataset.inst)); if (oi) HB.f.inst = oi; }
+      hBuscar(); }
     return; }
   if (a === 'h-reintentar'){ hCargarCat(); return; }
   if (a === 'h-per'){ HB.f.per = t.dataset.k; if (t.dataset.k === 'f' && !HB.f.desde){ HB.f.desde = hoyIso().slice(0, 4) + '-01-01'; HB.f.hasta = hoyIso(); } HB.err = ''; dibujar(); return; }
