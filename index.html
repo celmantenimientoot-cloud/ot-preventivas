@@ -1024,9 +1024,9 @@ function vOt(){
       return `<div class="aviso p-w">Esta OT incluye rutina ${R.map(k => rutPill(k) + (n(k) ? ` en ${n(k)} equipo${n(k) === 1 ? '' : 's'}` : '')).join(' · ')}: además de lo mensual, aparecen esas tareas.</div>`; })()}
   ${(o.con || []).length && o.estado !== 'hecha' ? `<div class="aviso p-i">La compartís con <b>${esc(o.con.join(', '))}</b>. Repártanse los equipos: lo que guarda cada uno le aparece al otro cuando tiene señal.</div>` : ''}
   ${porSala || partes + equipos}
+  <button class="btn h-eq" data-a="h-equipo" data-q="${esc(e.cod || e.den || e.nombre || '')}" data-piso="${esc(o.piso || '')}" style="width:100%;margin:0 0 8px">🔎 Ver historial de este equipo</button>
   <div class="card">${salaAct ? `<div class="sala-eq">📍 ${esc(salaAct.n)}</div>` : ''}${e.cod ? `<div class="cod-eq">${esc(e.cod)}</div>` : ''}
     ${e.den ? `<div class="den-eq">${esc(e.den)}</div>` : `<div class="t">${esc(e.nombre || e.cod)}</div>`}
-    <button class="btn h-eq" data-a="h-equipo" data-q="${esc(e.cod || e.den || e.nombre || '')}" data-piso="${esc(o.piso || '')}">🔎 Ver historial de este equipo</button>
     ${RUT_TXT[(o.tipos || {})[c.parte + '|' + c.eq]] ? `<div class="m">Rutina de este equipo: ${rutPill((o.tipos || {})[c.parte + '|' + c.eq])}</div>` : ''}
     ${cerrado && /^SIN ACCESO/.test(por) ? `<div class="m"><span class="pill p-b">🚫 Sin acceso${/sin enviar/.test(por) ? ' · sin enviar' : ''}</span></div>`
     : cerrado ? `<div class="m"><span class="pill p-ok">Guardado por ${esc(por)}</span></div>`
