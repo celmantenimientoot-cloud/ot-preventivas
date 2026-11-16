@@ -851,15 +851,18 @@ function vVincularTec(){
   <p class="o" style="margin-top:22px"><button data-a="vinc-tablet" style="background:none;border:0;color:var(--muted);text-decoration:underline;font:inherit;font-size:13px;cursor:pointer">¿Es una tablet de bomberos? Vincular con código</button></p></main>`;
 }
 async function vincularTec(cuerpo){
-  E.msg = ''; dibujar();
+  // Una sola vinculación a la vez (16/11/2026, FS): mientras espera la respuesta la cámara no vuelve a leer la tarjeta;
+  // si no, cada lectura vinculaba de nuevo, reemplazaba a la anterior y la app entraba y salía.
+  if (E.vinculando) return;
+  E.vinculando = true; E.msg = 'Vinculando…'; dibujar();
   try {
     const j = await enviar(Object.assign({ op: 'vincular_tec' }, cuerpo));
     E.tablet = j.tablet; await DB.set('tablet', E.tablet);
     await guardarCatalogo(j.termo ? j : await enviar(conClave({ op: 'bajar' }))); // el servidor nuevo ya manda las OT
     const b = E.cat.bomberos[0];
     if (b) iniciarSesion(b); else { E.pantalla = 'login'; dibujar(); }
-    toast('Celular vinculado');
-  } catch(e){ E.msg = e.message; dibujar(); }
+    E.vinculando = false; toast('Celular vinculado');
+  } catch(e){ E.vinculando = false; E.msg = e.message; dibujar(); }
 }
 const esIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const enInicio = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
@@ -1024,7 +1027,7 @@ function vOt(){
       return `<div class="aviso p-w">Esta OT incluye rutina ${R.map(k => rutPill(k) + (n(k) ? ` en ${n(k)} equipo${n(k) === 1 ? '' : 's'}` : '')).join(' · ')}: además de lo mensual, aparecen esas tareas.</div>`; })()}
   ${(o.con || []).length && o.estado !== 'hecha' ? `<div class="aviso p-i">La compartís con <b>${esc(o.con.join(', '))}</b>. Repártanse los equipos: lo que guarda cada uno le aparece al otro cuando tiene señal.</div>` : ''}
   ${porSala || partes + equipos}
-  <button class="btn h-eq" data-a="h-equipo" data-q="${esc(e.cod || e.den || e.nombre || '')}" data-piso="${esc(o.piso || '')}" style="width:100%;margin:0 0 8px">🔎 Ver historial de este equipo</button>
+  <button class="btn h-eq" data-a="h-equipo" data-q="${esc(e.cod || e.den || e.nombre || '')}" data-piso="${esc(o.piso || '')}" data-ed="${esc(o.ed || (/^(CEL|CEN|EC)-/i.exec(e.cod || '') || [])[1] || '')}" style="width:100%;margin:0 0 8px">🔎 Ver historial de este equipo</button>
   <div class="card">${salaAct ? `<div class="sala-eq">📍 ${esc(salaAct.n)}</div>` : ''}${e.cod ? `<div class="cod-eq">${esc(e.cod)}</div>` : ''}
     ${e.den ? `<div class="den-eq">${esc(e.den)}</div>` : `<div class="t">${esc(e.nombre || e.cod)}</div>`}
     ${RUT_TXT[(o.tipos || {})[c.parte + '|' + c.eq]] ? `<div class="m">Rutina de este equipo: ${rutPill((o.tipos || {})[c.parte + '|' + c.eq])}</div>` : ''}
@@ -1286,7 +1289,7 @@ function vHBuscar(){
     <div class="card" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px">
       <div style="grid-column:1/-1"><div class="m" style="margin-bottom:4px">Período</div><div class="chips" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${per.map(([k, t]) => `<button data-a="h-per" data-k="${k}" aria-pressed="${f.per === k}" style="width:100%;margin:0;padding-left:4px;padding-right:4px;white-space:nowrap;text-align:center">${t}</button>`).join('')}</div></div>
       ${f.per === 'f' ? `<label class="f" style="margin:0">Desde<input type="date" id="h-d1" value="${esc(f.desde)}"></label><label class="f" style="margin:0">Hasta<input type="date" id="h-d2" value="${esc(f.hasta)}"></label>` : ''}
-      ${sel('h-ed', 'Edificio', O.ed, f.ed, 'Todos')}${sel('h-piso', 'Piso', O.piso, f.piso, 'Todos')}${sel('h-inst', 'Instalación', O.inst, f.inst, 'Todas')}${sel('h-fam', 'Familia', O.fam, f.fam, 'Todas')}
+      ${HB.edFijo ? `<label class="f" style="margin:0">Edificio<select id="h-ed" disabled title="Es el edificio de la OT"><option>🔒 ${esc(HB.edFijo)}</option></select></label>` : sel('h-ed', 'Edificio', O.ed, f.ed, 'Todos')}${sel('h-piso', 'Piso', O.piso, f.piso, 'Todos')}${sel('h-inst', 'Instalación', O.inst, f.inst, 'Todas')}${sel('h-fam', 'Familia', O.fam, f.fam, 'Todas')}
       <div style="grid-column:1/-1">${sel('h-sec', 'Sector', O.sec, f.sec, 'Todos')}</div>
       <label class="f" style="margin:0;grid-column:1/-1">Equipo o palabra<input type="search" id="h-q" value="${esc(f.q)}" placeholder="UTA 26, correa, sifón…" autocomplete="off" enterkeyhint="search"></label>
       <div id="h-sug" class="h-sug" style="grid-column:1/-1"></div>
@@ -1442,7 +1445,7 @@ function dibujar(){
   app.innerHTML = v();
   if (foco && document.getElementById(foco)){ const el = document.getElementById(foco); el.focus(); if (el.setSelectionRange && el.value != null) try { el.setSelectionRange(el.value.length, el.value.length); } catch(x){} }
   E.pantallaDibujada = E.pantalla;
-  const camara = E.pantalla === 'escanear' || E.pantalla === 'vincular-tec' || (E.pantalla === 'login' && (esTec() ? E.usarTarjeta : !E.bomberoPin));
+  const camara = E.pantalla === 'escanear' || (E.pantalla === 'vincular-tec' && !E.vinculando) || (E.pantalla === 'login' && (esTec() ? E.usarTarjeta : !E.bomberoPin));
   if (!camara) pararCamara();
   else if ((!CAM.stream && !CAM.abriendo) || antes !== E.pantalla) iniciarCamara(E.pantalla === 'login' ? entrarConQR : E.pantalla === 'vincular-tec' ? txt => vincularTec({ qr: txt }) : txt => abrirControl(txt));
   else { const vid = document.getElementById('video'); if (vid && CAM.stream){ vid.srcObject = CAM.stream; vid.play().catch(() => {}); } }
@@ -1518,10 +1521,11 @@ document.addEventListener('click', async ev => {
     guardarBorrador(); dibujar(); return;
   }
   if (a === 'guardar-eq'){ guardarEquipo(); return; }
-  if (a === 'h-abrir'){ E.pantalla = 'hbuscar'; HB.res = null; HB.err = ''; dibujar(); if (!HB.cat) hCargarCat(); return; }
+  if (a === 'h-abrir'){ HB.edFijo = ''; E.pantalla = 'hbuscar'; HB.res = null; HB.err = ''; dibujar(); if (!HB.cat) hCargarCat(); return; }
   if (a === 'h-salir'){ E.pantalla = HB.volver || 'inicio'; HB.volver = ''; dibujar(); return; }
   if (a === 'h-equipo'){ // desde el equipo de la OT: el historial ya filtrado por ese equipo y su piso
-    Object.assign(HB.f, { ed: t.dataset.ed || E.tablet.ed || '', piso: t.dataset.piso, inst: '', fam: '', sec: '', q: t.dataset.q, per: '12' });
+    const edOt = t.dataset.ed || E.tablet.ed || ''; HB.edFijo = E.cat && E.cat.sup ? '' : edOt; // desde una OT: el técnico ve solo el edificio de la OT; el supervisor lo puede cambiar (JT, 16/11/2026)
+    Object.assign(HB.f, { ed: edOt, piso: t.dataset.piso, inst: '', fam: '', sec: '', q: t.dataset.q, per: '12' });
     HB.volver = t.dataset.volver || 'ot'; HB.res = null; HB.err = ''; HB.vista = 'co'; E.pantalla = 'hbuscar'; dibujar();
     if (!HB.cat) await hCargarCat();
     if (HB.cat){ const op = hOpciones().piso.find(x => hPiso(x) === hPiso(HB.f.piso)); HB.f.piso = op || '';
