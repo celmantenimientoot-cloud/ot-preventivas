@@ -1363,10 +1363,11 @@ function vCorr(){
     : e === 'pausa' ? '<span class="pill p-w">Pausada</span>' : e === 'devuelta' ? '<span class="pill p-b">Devuelta</span>' : !E.vistas[o.ot] ? '<span class="pill p-b">NUEVA</span>' : ''; };
   return barra('🔧 Correctivos', 'Mis OT · ' + esc(E.tablet.ed), '<button data-a="corr-volver">‹ Carpetas</button>') + `<main>${aviso()}
   ${L.length ? L.map(o => `<button class="card" data-a="corr-ot" data-ot="${esc(o.ot)}" style="text-align:left;width:100%;cursor:pointer">
-    <div class="t"><b>OT ${esc(o.ot)}</b> ${critPill(o.crit)} ${pill(o)}${(o.con || []).length ? ` <span class="pill p-ok">Con ${esc(o.con.join(', '))}</span>` : ''}</div>
+    <div class="t"><b>OT ${esc(o.ot)}</b> ${critPill(o.crit)} ${pill(o)}</div>
     <div style="margin:4px 0">${esc(o.desc)}</div>
     <div class="m">${esc([o.ed, pisoTxt(o.piso), o.sector, o.eq].filter(Boolean).join(' · '))}${o.est ? ' · estimado ' + o.est + ' min' : ''}</div>
-    <div class="m" style="margin-top:2px">📅 Ejecución: <b>${fIso(o.ejec) ? esc(fmtD(fIso(o.ejec))) : 'sin fecha'}</b></div></button>`).join('')
+    <div class="m" style="margin-top:2px">📅 Ejecución: <b>${fIso(o.ejec) ? esc(fmtD(fIso(o.ejec))) : 'sin fecha'}</b>${o.asigPor ? ` · 👤 Asignó: <b>${esc(o.asigPor)}</b>` : ''}</div>
+    ${(o.con || []).length ? `<div class="m" style="margin-top:2px">👥 Con: <b>${esc(o.con.join(', '))}</b></div>` : ''}</button>`).join('')
   : '<div class="aviso p-ok">✔ No tenés OT correctivas. Las nuevas aparecen solas cuando hay señal.</div>'}
   ${pieLista()}</main>`;
 }
@@ -1389,8 +1390,8 @@ function vCorrOt(){
     <p class="m" style="margin:0">Terminada no cierra la OT: va al supervisor para que la revise. Sin señal, se envía sola cuando vuelve.</p>`;
   return barra('OT ' + esc(o.ot), esc(o.ed), '<button data-a="corr-lista">‹ Correctivos</button>') + `<main>${aviso()}
   <div class="card"><div class="t" style="font-size:17px">${esc(o.desc)}</div>
-    <div class="kv" style="margin-top:8px">${[['Criticidad', critPill(o.crit) || '–'], ['Instalación', esc([o.inst, o.fam].filter(Boolean).join(' › '))], ['Lugar', esc([pisoTxt(o.piso), o.sector].filter(Boolean).join(' · '))],
-      ['Equipo', esc(o.eq)], ['Tarea', esc(o.adic)], ['Con', esc((o.con || []).join(', '))], ['Tiempo estimado', o.est ? o.est + ' min' : ''], ['Ejecución', fIso(o.ejec) ? esc(fmtD(fIso(o.ejec))) : '']].filter(x => x[1]).map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>
+    <div class="kv" style="margin-top:8px">${[['Criticidad', critPill(o.crit) || '–'], ['Instalación', esc(o.inst)], ['Familia', esc(o.fam)], ['Lugar', esc([pisoTxt(o.piso), o.sector].filter(Boolean).join(' · '))],
+      ['Equipo', esc(o.eq)], ['Tarea', esc(o.adic)], ['Asignó', esc(o.asigPor)], ['Con', esc((o.con || []).join(', '))], ['Tiempo estimado', o.est ? o.est + ' min' : ''], ['Ejecución', fIso(o.ejec) ? esc(fmtD(fIso(o.ejec))) : '']].filter(x => x[1]).map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>
     ${o.eq || o.piso ? `<button class="btn h-eq" data-a="h-equipo" data-q="${esc(o.eq || '')}" data-piso="${esc(o.piso || '')}" data-ed="${esc(o.ed || '')}" data-inst="${o.eq ? '' : esc(o.inst || '')}" data-volver="corrOt" style="margin-top:10px">🔎 Ver historial de ${o.eq ? 'este equipo' : 'este piso'}</button>` : ''}</div>
   ${cuerpo}</main>`;
 }
