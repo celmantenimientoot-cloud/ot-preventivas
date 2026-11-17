@@ -1356,9 +1356,9 @@ function corrCarpetas(){
 const fIso = t => { t = String(t || '').trim(); let m = t.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return m[1] + '-' + m[2] + '-' + m[3];
   m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0') : ''; };
 function vCorr(){
-  // Orden (JT, 17/11/2026): criticidad A primero, después B, C…; dentro de cada una, por fecha de ejecución: la más antigua arriba. Las enviadas al supervisor, al final.
+  // Orden (JT, 17/11/2026): manda la fecha de ejecución, la más vieja arriba; el mismo día, criticidad A, B, C. Sin fecha, al final. Las enviadas al supervisor, al final.
   const crit = o => String(o.crit || '').trim().toUpperCase() || 'Z', ent = o => fIso(o.ejec) || '9999';
-  const L = CORR().slice().sort((a, b) => (corrEstado(a) === 'enviada') - (corrEstado(b) === 'enviada') || crit(a).localeCompare(crit(b)) || ent(a).localeCompare(ent(b)) || Number(a.ot) - Number(b.ot));
+  const L = CORR().slice().sort((a, b) => (corrEstado(a) === 'enviada') - (corrEstado(b) === 'enviada') || ent(a).localeCompare(ent(b)) || crit(a).localeCompare(crit(b)) || Number(a.ot) - Number(b.ot));
   const pill = o => { const e = corrEstado(o); return e === 'enviada' ? '<span class="pill p-i">Enviada al supervisor</span>' : e === 'corre' ? '<span class="pill p-ok">En curso</span>'
     : e === 'pausa' ? '<span class="pill p-w">Pausada</span>' : e === 'devuelta' ? '<span class="pill p-b">Devuelta</span>' : !E.vistas[o.ot] ? '<span class="pill p-b">NUEVA</span>' : ''; };
   return barra('🔧 Correctivos', 'Mis OT · ' + esc(E.tablet.ed), '<button data-a="corr-volver">‹ Carpetas</button>') + `<main>${aviso()}
