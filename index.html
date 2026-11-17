@@ -930,8 +930,8 @@ function vInicioTec(){
         <div class="m">${n ? `<b>${n}</b> OT preventiva${n === 1 ? '' : 's'} por hacer` : '<span class="pill p-ok">✔ Todo hecho</span>'}</div></button>`; };
     return barra('Hola, ' + E.sesion.nombre, 'Mis OT · ' + esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + `<main>${aviso()}
     <button class="card hist-btn" data-a="h-abrir"><span class="ico">🔎</span><div><div class="t" style="font-size:16px">Historial de equipos</div><div class="m">Correctivos y preventivos · buscá por piso, instalación o equipo</div></div></button>
-    ${corrCarpetas()}
-    <h2 style="margin:14px 0 2px">🗓️ Mantenimiento preventivo</h2>${insts.length ? `<p class="m" style="margin:0 0 10px">Elegí la instalación</p>${insts.map(carpeta).join('')}` : '<div class="card"><span class="pill p-ok">✔ No tenés preventivos pendientes</span></div>'}
+    ${corrCarpetas() || (insts.length ? '' : '<div class="aviso p-i">No tenés OT asignadas. Cuando te asignen correctivos o preventivos, aparecen acá solas (con señal).</div>')}
+    ${insts.length ? `<h2 style="margin:14px 0 2px">🗓️ Mantenimiento preventivo</h2><p class="m" style="margin:0 0 10px">Elegí la instalación</p>${insts.map(carpeta).join('')}` : ''}
     ${pieLista()}</main>`;
   }
   const enCarpeta = insts.length ? E.inst : '';
@@ -1343,21 +1343,30 @@ const critPill = c => c ? `<span class="pill" style="background:${critCol(c)[0]}
 const nuevoUid = () => E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
 function corrCarpetas(){
   const L = CORR(), pend = L.filter(o => corrEstado(o) !== 'enviada'), nuevas = pend.filter(o => !E.vistas[o.ot]).length, C = E.cat.corrCerrar, K = E.cat.corrCurso || [];
+  // Solo lo que tiene (JT, 17/11/2026): sin correctivas asignadas no aparece la carpeta; la del supervisor, solo con algo para cerrar o en curso
+  const sup = C && (C.length || K.length);
+  if (!L.length && !sup) return '';
   return `<h2 style="margin:14px 0 2px">🔧 Mantenimiento correctivo</h2>
-  <button class="card carpeta corr" data-a="corr-lista"><div class="t"><span class="ico">🔧</span> Correctivos</div>
-    <div class="m">${pend.length ? `<b>${pend.length}</b> OT pendiente${pend.length === 1 ? '' : 's'}${nuevas ? ` · <span class="pill p-b">${nuevas} nueva${nuevas === 1 ? '' : 's'}</span>` : ''}` : '<span class="pill p-ok">✔ No tenés correctivos pendientes</span>'}</div></button>
-  ${C ? `<button class="card carpeta" data-a="sup-lista" style="border-left:8px solid ${C.length ? '#0064d9' : '#2d8a4e'}"><div class="t"><span class="ico">✔</span> Supervisor · correctivos</div>
+  ${L.length ? `<button class="card carpeta corr" data-a="corr-lista"><div class="t"><span class="ico">🔧</span> Correctivos</div>
+    <div class="m">${pend.length ? `<b>${pend.length}</b> OT pendiente${pend.length === 1 ? '' : 's'}${nuevas ? ` · <span class="pill p-b">${nuevas} nueva${nuevas === 1 ? '' : 's'}</span>` : ''}` : '<span class="pill p-ok">✔ No tenés correctivos pendientes</span>'}</div></button>` : ''}
+  ${sup ? `<button class="card carpeta" data-a="sup-lista" style="border-left:8px solid ${C.length ? '#0064d9' : '#2d8a4e'}"><div class="t"><span class="ico">✔</span> Supervisor · correctivos</div>
     <div class="m">${C.length ? `<b>${C.length}</b> para cerrar` : '<span class="pill p-ok">✔ Nada para cerrar</span>'}${K.length ? ` · ${K.length} en curso` : ''}</div></button>` : ''}`;
 }
+// Fecha del sistema ("31/1/2025" o "2025-01-31") a "2025-01-31" para ordenar y mostrar
+const fIso = t => { t = String(t || '').trim(); let m = t.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0') : ''; };
 function vCorr(){
-  const L = CORR().slice().sort((a, b) => (corrEstado(a) === 'enviada') - (corrEstado(b) === 'enviada') || String(a.crit).localeCompare(String(b.crit)) || Number(a.ot) - Number(b.ot));
+  // Orden (JT, 17/11/2026): criticidad A primero, después B, C…; dentro de cada una, por fecha de ejecución: la más antigua arriba. Las enviadas al supervisor, al final.
+  const crit = o => String(o.crit || '').trim().toUpperCase() || 'Z', ent = o => fIso(o.ejec) || '9999';
+  const L = CORR().slice().sort((a, b) => (corrEstado(a) === 'enviada') - (corrEstado(b) === 'enviada') || crit(a).localeCompare(crit(b)) || ent(a).localeCompare(ent(b)) || Number(a.ot) - Number(b.ot));
   const pill = o => { const e = corrEstado(o); return e === 'enviada' ? '<span class="pill p-i">Enviada al supervisor</span>' : e === 'corre' ? '<span class="pill p-ok">En curso</span>'
     : e === 'pausa' ? '<span class="pill p-w">Pausada</span>' : e === 'devuelta' ? '<span class="pill p-b">Devuelta</span>' : !E.vistas[o.ot] ? '<span class="pill p-b">NUEVA</span>' : ''; };
   return barra('🔧 Correctivos', 'Mis OT · ' + esc(E.tablet.ed), '<button data-a="corr-volver">‹ Carpetas</button>') + `<main>${aviso()}
   ${L.length ? L.map(o => `<button class="card" data-a="corr-ot" data-ot="${esc(o.ot)}" style="text-align:left;width:100%;cursor:pointer">
     <div class="t"><b>OT ${esc(o.ot)}</b> ${critPill(o.crit)} ${pill(o)}${(o.con || []).length ? ` <span class="pill p-ok">Con ${esc(o.con.join(', '))}</span>` : ''}</div>
     <div style="margin:4px 0">${esc(o.desc)}</div>
-    <div class="m">${esc([o.ed, pisoTxt(o.piso), o.sector, o.eq].filter(Boolean).join(' · '))}${o.est ? ' · estimado ' + o.est + ' min' : ''}</div></button>`).join('')
+    <div class="m">${esc([o.ed, pisoTxt(o.piso), o.sector, o.eq].filter(Boolean).join(' · '))}${o.est ? ' · estimado ' + o.est + ' min' : ''}</div>
+    <div class="m" style="margin-top:2px">📅 Ejecución: <b>${fIso(o.ejec) ? esc(fmtD(fIso(o.ejec))) : 'sin fecha'}</b></div></button>`).join('')
   : '<div class="aviso p-ok">✔ No tenés OT correctivas. Las nuevas aparecen solas cuando hay señal.</div>'}
   ${pieLista()}</main>`;
 }
@@ -1381,7 +1390,7 @@ function vCorrOt(){
   return barra('OT ' + esc(o.ot), esc(o.ed), '<button data-a="corr-lista">‹ Correctivos</button>') + `<main>${aviso()}
   <div class="card"><div class="t" style="font-size:17px">${esc(o.desc)}</div>
     <div class="kv" style="margin-top:8px">${[['Criticidad', critPill(o.crit) || '–'], ['Instalación', esc([o.inst, o.fam].filter(Boolean).join(' › '))], ['Lugar', esc([pisoTxt(o.piso), o.sector].filter(Boolean).join(' · '))],
-      ['Equipo', esc(o.eq)], ['Tarea', esc(o.adic)], ['Con', esc((o.con || []).join(', '))], ['Tiempo estimado', o.est ? o.est + ' min' : ''], ['Entrada', esc(o.ent)]].filter(x => x[1]).map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>
+      ['Equipo', esc(o.eq)], ['Tarea', esc(o.adic)], ['Con', esc((o.con || []).join(', '))], ['Tiempo estimado', o.est ? o.est + ' min' : ''], ['Ejecución', fIso(o.ejec) ? esc(fmtD(fIso(o.ejec))) : '']].filter(x => x[1]).map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>
     ${o.eq || o.piso ? `<button class="btn h-eq" data-a="h-equipo" data-q="${esc(o.eq || '')}" data-piso="${esc(o.piso || '')}" data-ed="${esc(o.ed || '')}" data-inst="${o.eq ? '' : esc(o.inst || '')}" data-volver="corrOt" style="margin-top:10px">🔎 Ver historial de ${o.eq ? 'este equipo' : 'este piso'}</button>` : ''}</div>
   ${cuerpo}</main>`;
 }
