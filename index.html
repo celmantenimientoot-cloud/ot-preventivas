@@ -1355,9 +1355,9 @@ function avisoExt(){
   const dia = t => { const f = t.slice(0, 10); return (f === hoy ? 'hoy' : f === man ? 'mañana' : f.slice(8, 10) + '/' + f.slice(5, 7)) + ' ' + t.slice(11, 16); };
   return L.map(x => { const ya = x.ini <= ahora;
     return `<div class="card" style="border-left:8px solid #e9730c;background:#fff8f0;margin-bottom:10px">
-      <div class="t" style="font-size:16px">🌙 Extensión de A.A. · <b>${esc(x.inq)}</b> ${ya ? '<span class="pill" style="background:#e9730c;color:#fff">En curso</span>' : ''}</div>
+      <div class="t" style="font-size:16px">🌙 Extensión de HVAC · <b>${esc(x.inq)}</b> ${ya ? '<span class="pill" style="background:#e9730c;color:#fff">En curso</span>' : ''}</div>
       <div style="margin:4px 0;font-size:15px"><b>${esc(dia(x.ini))}</b> → <b>${esc(dia(x.fin))}</b>${x.uta ? ` · ${esc(x.uta)} UTA` : ''}</div>
-      <div class="m">Mantener <b>UN solo chiller</b> encendido: es fuera del horario operativo y son pocas UTA (aunque en verano suelan estar los 2).${x.nota ? '<br>' + esc(x.nota) : ''}</div></div>`; }).join('');
+      <div class="m">Mantener <b>un chiller encendido</b> en el horario de extensión solicitado.${x.nota ? '<br>' + esc(x.nota) : ''}</div></div>`; }).join('');
 }
 function corrCarpetas(){
   const L = CORR(), pend = L.filter(o => corrEstado(o) !== 'enviada'), nuevas = pend.filter(o => !E.vistas[o.ot]).length, C = E.cat.corrCerrar, K = E.cat.corrCurso || [];
