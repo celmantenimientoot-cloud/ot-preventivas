@@ -932,7 +932,9 @@ function vInicioTec(){
         <div class="m">${n ? `<b>${n}</b> OT preventiva${n === 1 ? '' : 's'} por hacer` : '<span class="pill p-ok">✔ Todo hecho</span>'}</div></button>`; };
     return barra('Hola, ' + E.sesion.nombre, 'Mis OT · ' + esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + `<main>${aviso()}
     <button class="card hist-btn" data-a="h-abrir"><span class="ico">🔎</span><div><div class="t" style="font-size:16px">Historial de equipos</div><div class="m">Correctivos y preventivos · buscá por piso, instalación o equipo</div></div></button>
-    ${corrCarpetas() || (insts.length ? '' : '<div class="aviso p-i">No tenés OT asignadas. Cuando te asignen correctivos o preventivos, aparecen acá solas (con señal).</div>')}
+    ${E.cat.sup ? `<h2 style="margin:14px 0 2px">✔ Supervisor</h2><button class="card carpeta" data-a="ps-abrir" style="border-left:8px solid #0064d9"><div class="t"><span class="ico">🗓️</span> Asignar preventivos</div>
+      <div class="m">OT de la semana sin técnico, o pasar a otro las que no se empezaron · necesita señal</div></button>` : ''}
+    ${corrCarpetas() || (insts.length || E.cat.sup ? '' : '<div class="aviso p-i">No tenés OT asignadas. Cuando te asignen correctivos o preventivos, aparecen acá solas (con señal).</div>')}
     ${insts.length ? `<h2 style="margin:14px 0 2px">🗓️ Mantenimiento preventivo</h2><p class="m" style="margin:0 0 10px">Elegí la instalación</p>${insts.map(carpeta).join('')}` : ''}
     ${pieLista()}</main>`;
   }
@@ -1479,6 +1481,50 @@ function vidListo(ot, blob){
   dibujar(); toast('Video listo: se envía al tocar Terminada');
 }
 // Supervisor: en curso (para pausar o reanudar, si un técnico le avisa) y las terminadas para cerrar. Necesita señal.
+// ---- Supervisor: asignar OT preventivas desde el celular (JT, 18/11/2026). CEL y CEN separados; sin técnico arriba (resaltadas);
+// las asignadas sin empezar se pueden pasar a otro técnico. Lo empezado se pasa desde el sistema. Necesita señal.
+const PS = { datos: null, ed: '', sel: {}, tecs: [], cargando: false, inst: '' };
+const INST_PS = { TERMOMECANICA: 'Termomecánica', ELECTRICO: 'Eléctrico', 'CCTV/CAS': 'CCTV/CAS', SANITARIO: 'Sanitario', COMBUSTIBLE: 'Combustible', ASCENSORES: 'Ascensores' };
+async function psCargar(cuerpo){
+  if (!E.online){ toast('Sin señal: para asignar hace falta conexión'); return; }
+  PS.cargando = true; dibujar();
+  try { const j = await enviar(conClave(Object.assign({ op: 'prev_sup' }, cuerpo || {}))); PS.datos = j;
+    if (cuerpo && cuerpo.accion === 'asignar'){ PS.sel = {}; toast(j.hechas + ' OT asignada' + (j.hechas === 1 ? '' : 's') + (j.salteadas ? ' · ' + j.salteadas + ' ya empezada(s), no se tocaron' : '')); } }
+  catch(e){ if (!sinAcceso(e)) toast(e.message); }
+  PS.cargando = false; dibujar();
+}
+function vPrevSup(){
+  const D = PS.datos, cab = barra('🗓️ Asignar preventivos', 'Supervisor · ' + esc(E.sesion.nombre), '<button data-a="corr-volver">‹ Carpetas</button>');
+  if (!D) return cab + `<main>${aviso()}<p class="o">${PS.cargando ? 'Cargando las OT…' : E.online ? '' : 'Sin señal: para asignar hace falta conexión.'}</p>${!PS.cargando ? '<button class="btn" data-a="ps-recargar" style="width:100%">Cargar</button>' : ''}</main>`;
+  const eds = [...new Set(D.ots.map(o => o.ed))].sort(); if (!eds.includes(PS.ed)) PS.ed = eds.includes(E.tablet.ed) ? E.tablet.ed : eds[0] || '';
+  const deEd = D.ots.filter(o => o.ed === PS.ed), insts = [...new Set(deEd.map(o => o.inst))].sort(); if (PS.inst && !insts.includes(PS.inst)) PS.inst = '';
+  const L = deEd.filter(o => !PS.inst || o.inst === PS.inst).sort((a, b) => a.semana.localeCompare(b.semana) || String(a.otn).localeCompare(String(b.otn), 'es', { numeric: true }) || a.nombre.localeCompare(b.nombre));
+  const sin = L.filter(o => !o.tec.length), libres = L.filter(o => o.tec.length && !o.empezada), emp = L.filter(o => o.tec.length && o.empezada);
+  const nSel = L.filter(o => PS.sel[o.id]).length, puede = nSel && PS.tecs.length && E.online && !PS.cargando;
+  const nombre = ini => { const t = D.plantel.find(x => x.ini === ini); return t ? t.nombre : ini; };
+  const tarjeta = (o, col) => `<label class="card" style="display:flex;gap:10px;align-items:flex-start;border-left:6px solid ${col};cursor:pointer;margin-bottom:8px">
+    <input type="checkbox" data-ps-ot="${esc(o.id)}" ${PS.sel[o.id] ? 'checked' : ''} style="width:24px;height:24px;margin-top:2px;flex:none">
+    <span style="flex:1"><span class="t" style="display:block">${o.otn ? '<b>OT N° ' + esc(o.otn) + '</b> · ' : ''}${esc(o.nombre)}</span>
+    <span class="m" style="display:block">${esc([o.piso ? 'Piso ' + o.piso : '', INST_PS[o.inst] || o.inst, o.semanaTxt].filter(Boolean).join(' · '))}</span>
+    ${o.tec.length ? `<span class="m" style="display:block">👤 ${esc(o.tec.join(', '))}</span>` : '<span class="pill" style="background:#fde2e1;color:#a3201b;margin-top:4px">Sin técnico</span>'}</span></label>`;
+  const marcarTodas = (lista, k) => lista.length ? `<button class="btn" data-a="ps-todas" data-k="${k}" style="min-height:36px;padding:0 12px;font-size:14px">${lista.every(o => PS.sel[o.id]) ? 'Desmarcar todas' : 'Marcar todas'}</button>` : '';
+  return cab + `<main>${aviso()}
+  ${eds.length > 1 ? `<div class="seg" style="margin-bottom:10px">${eds.map(e => `<button data-a="ps-ed" data-ed="${e}" aria-pressed="${e === PS.ed}">🏢 ${e}</button>`).join('')}</div>` : ''}
+  ${insts.length > 1 ? `<label class="f" style="margin-bottom:10px">Instalación<select id="ps-inst"><option value="">Todas</option>${insts.map(i => `<option value="${esc(i)}" ${i === PS.inst ? 'selected' : ''}>${esc(INST_PS[i] || i)}</option>`).join('')}</select></label>` : ''}
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:4px 0 6px"><h2 style="margin:0">Sin técnico (${sin.length})</h2>${marcarTodas(sin, 'sin')}</div>
+  ${sin.length ? sin.map(o => tarjeta(o, '#d93025')).join('') : '<div class="aviso p-ok">✔ Todas tienen técnico.</div>'}
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:16px 0 6px"><h2 style="margin:0">Asignadas, sin empezar (${libres.length})</h2>${marcarTodas(libres, 'libres')}</div>
+  <p class="m" style="margin:0 0 8px">Marcalas para pasarlas a otro técnico.</p>
+  ${libres.length ? libres.map(o => tarjeta(o, '#0064d9')).join('') : '<p class="m">No hay.</p>'}
+  ${emp.length ? `<p class="m" style="margin:12px 0 0">${emp.length} OT ya empezada${emp.length === 1 ? '' : 's'}: si hay que pasarla${emp.length === 1 ? '' : 's'}, se hace desde el sistema.</p>` : ''}
+  <div class="card" style="position:sticky;bottom:0;margin-top:14px;box-shadow:0 -4px 14px rgba(0,0,0,.12)">
+    <div class="t" style="margin-bottom:6px">Técnico${PS.tecs.length > 1 ? 's' : ''} para las ${nSel} marcada${nSel === 1 ? '' : 's'}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">${D.plantel.map(t => `<label class="pill" style="font-size:15px;padding:8px 12px;cursor:pointer;${PS.tecs.includes(t.ini) ? 'background:var(--pri);color:#fff' : ''}"><input type="checkbox" data-ps-tec="${esc(t.ini)}" ${PS.tecs.includes(t.ini) ? 'checked' : ''} hidden>${esc(t.ini)}</label>`).join('')}</div>
+    ${PS.tecs.length ? `<p class="m" style="margin:0 0 8px">${esc(PS.tecs.map(nombre).join(', '))}</p>` : ''}
+    <button class="big" data-a="ps-asignar" style="margin:0" ${puede ? '' : 'disabled'}>${PS.cargando ? '⏳ Guardando…' : !nSel ? 'Marcá las OT' : !PS.tecs.length ? 'Elegí el técnico' : 'Asignar ' + nSel + ' OT'}</button>
+  </div>
+  <p class="o"><button class="btn" data-a="ps-recargar" style="min-height:36px;padding:0 12px" ${E.online ? '' : 'disabled'}>Actualizar</button></p></main>`;
+}
 function vCorrSup(){
   const C0 = E.cat.corrCerrar || [], K0 = E.cat.corrCurso || [], tecs = [...new Set(C0.concat(K0).map(o => o.st.tec).filter(Boolean))].sort();
   if (E.supTec && !tecs.includes(E.supTec)) E.supTec = '';
@@ -1548,7 +1594,7 @@ async function supAccion(accion, ot){
 function dibujar(){
   const app = document.getElementById('app'), antes = E.pantallaDibujada;
   if (E.qr && E.pantalla === 'inicio' && E.sesion){ if (esTec()){ E.pantalla = 'historial'; setTimeout(cargarHistorial, 0); } else { E.qr = null; E.msg = 'Ese QR es para la app de los técnicos (celular).'; } }
-  const v = { vincular: vVincular, 'vincular-tec': vVincularTec, login: vLogin, inicio: vInicio, superv: vSuperv, corr: vCorr, corrOt: vCorrOt, corrSup: vCorrSup, corrSupOt: vCorrSupOt, historial: vHistorial, hbuscar: vHBuscar, entregar: vEntregar, escanear: vEscanear, buscar: vBuscar, control: vControl, ot: vOt }[E.pantalla];
+  const v = { vincular: vVincular, 'vincular-tec': vVincularTec, login: vLogin, inicio: vInicio, superv: vSuperv, corr: vCorr, corrOt: vCorrOt, corrSup: vCorrSup, prevSup: vPrevSup, corrSupOt: vCorrSupOt, historial: vHistorial, hbuscar: vHBuscar, entregar: vEntregar, escanear: vEscanear, buscar: vBuscar, control: vControl, ot: vOt }[E.pantalla];
   if (!v){ app.innerHTML = '<main><p class="o">Cargando…</p></main>'; return; }
   // No redibujar mientras se escribe en un campo de texto (se perdería el foco)
   const foco = document.activeElement && document.activeElement.id;
@@ -1601,6 +1647,15 @@ document.addEventListener('click', async ev => {
   if (a === 'corr-empezar'){ corrEmpezar(); return; }
   if (a === 'sup-curso'){ supAccion(t.dataset.acc, t.dataset.ot); return; }
   if (a === 'corr-terminar'){ corrTerminar(); return; }
+  if (a === 'ps-abrir'){ E.pantalla = 'prevSup'; E.msg = ''; PS.datos = null; PS.sel = {}; dibujar(); window.scrollTo(0, 0); psCargar(); return; }
+  if (a === 'ps-recargar'){ psCargar(); return; }
+  if (a === 'ps-ed'){ PS.ed = t.dataset.ed; PS.sel = {}; dibujar(); return; }
+  if (a === 'ps-todas'){ const D = PS.datos; if (!D) return; const L = D.ots.filter(o => o.ed === PS.ed && (!PS.inst || o.inst === PS.inst) && (t.dataset.k === 'sin' ? !o.tec.length : o.tec.length && !o.empezada));
+    const todas = L.every(o => PS.sel[o.id]); L.forEach(o => { if (todas) delete PS.sel[o.id]; else PS.sel[o.id] = 1; }); dibujar(); return; }
+  if (a === 'ps-asignar'){ const ids = Object.keys(PS.sel).filter(id => (PS.datos.ots.find(o => o.id === id) || {}).ed === PS.ed);
+    if (!ids.length || !PS.tecs.length) return;
+    if (!confirm('¿Asignar ' + ids.length + ' OT a ' + PS.tecs.join(', ') + '?')) return;
+    psCargar({ accion: 'asignar', ids, tecs: PS.tecs }); return; }
   if (a === 'sup-lista'){ E.pantalla = 'corrSup'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'sup-ot'){ E.supOt = t.dataset.ot; E.pantalla = 'corrSupOt'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'sup-cerrar' || a === 'sup-relevante' || a === 'sup-devolver'){ supAccion(a.slice(4) === 'cerrar' ? 'cerrar' : a.slice(4)); return; }
@@ -1734,6 +1789,9 @@ document.addEventListener('change', ev => {
   if (el.id === 'l-bomb' && el.value){ E.bomberoPin = el.value; E.pin = ''; E.msg = ''; dibujar(); }
   if (el.id === 'c-foto') fotoElegida(el);
   if (el.id === 'corr-foto' || el.id === 'corr-foto-gal') corrFotoElegida(el); // cámara o galería (JT, 18/11/2026)
+  if (el.dataset.psOt){ if (el.checked) PS.sel[el.dataset.psOt] = 1; else delete PS.sel[el.dataset.psOt]; dibujar(); return; }
+  if (el.dataset.psTec){ const i = el.dataset.psTec; PS.tecs = el.checked ? PS.tecs.concat(i) : PS.tecs.filter(x => x !== i); dibujar(); return; }
+  if (el.id === 'ps-inst'){ PS.inst = el.value; PS.sel = {}; dibujar(); return; }
   if (el.id === 'sup-tec'){ E.supTec = el.value; dibujar(); return; }
   if (el.id === 'sv-tipo'){ E.sv.tipo = el.value; dibujar(); }
   if (el.id === 'sv-tablet'){ E.sv.tablet = el.value; dibujar(); }
