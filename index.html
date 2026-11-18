@@ -922,7 +922,8 @@ const etiquetaFrec = ru => ru.def.partes.every(p => p.secciones.every(s => s.ite
 const INST_TEC = { termo: { nom: 'Termomecánica', ico: '❄️', col: '#2e5a88' }, elec: { nom: 'Eléctrico', ico: '⚡', col: '#b7791f' }, cas: { nom: 'CCTV/CAS · molinetes y portones', ico: '🚧', col: '#6b4fa0' }, sani: { nom: 'Sanitario', ico: '🚰', col: '#1f7a8c' }, comb: { nom: 'Combustible', ico: '⛽', col: '#9a5b13' }, asc: { nom: 'Ascensores', ico: '🛗', col: '#4a5568' }, otra: { nom: 'Otras', ico: '🔧', col: '#5a6b65' } };
 const instOt = o => { const i = String((T_().rutinas[o.rutina] || {}).inst || '').toUpperCase(); return /^TERMOMEC/.test(i) || !i ? 'termo' : /^ELEC/.test(i) ? 'elec' : /CCTV|CAS/.test(i) ? 'cas' : /^SANIT/.test(i) ? 'sani' : /^COMBUST/.test(i) ? 'comb' : /^ASCENS/.test(i) ? 'asc' : 'otra'; };
 function vInicioTec(){
-  const todas = T_().ots, insts = Object.keys(INST_TEC).filter(k => todas.some(o => instOt(o) === k));
+  // Solo carpetas con algo pendiente (supervisor, 18/11/2026): al terminar todo, la carpeta desaparece enseguida
+  const todas = T_().ots, insts = Object.keys(INST_TEC).filter(k => todas.some(o => instOt(o) === k && o.estado !== 'hecha'));
   // Carpetas siempre (11/11/2026, JT): aunque tenga OT de una sola instalación, primero la carpeta (antes, con una sola,
   // iba directo a la lista y parecía que las carpetas habían desaparecido)
   if (!insts.includes(E.inst)) {
@@ -934,7 +935,7 @@ function vInicioTec(){
     <button class="card hist-btn" data-a="h-abrir"><span class="ico">🔎</span><div><div class="t" style="font-size:16px">Historial de equipos</div><div class="m">Correctivos y preventivos · buscá por piso, instalación o equipo</div></div></button>
     ${E.cat.sup ? `<h2 style="margin:14px 0 2px">✔ Supervisor</h2><button class="card carpeta" data-a="ps-abrir" style="border-left:8px solid #0064d9"><div class="t"><span class="ico">🗓️</span> Asignar preventivos</div>
       <div class="m">OT de la semana sin técnico, o pasar a otro las que no se empezaron · necesita señal</div></button>` : ''}
-    ${corrCarpetas() || (insts.length || E.cat.sup ? '' : '<div class="aviso p-i">No tenés OT asignadas. Cuando te asignen correctivos o preventivos, aparecen acá solas (con señal).</div>')}
+    ${corrCarpetas() || (insts.length || E.cat.sup ? '' : '<div class="aviso p-i">✔ No tenés OT pendientes. Cuando te asignen correctivos o preventivos, aparecen acá solas (con señal).</div>')}
     ${insts.length ? `<h2 style="margin:14px 0 2px">🗓️ Mantenimiento preventivo</h2><p class="m" style="margin:0 0 10px">Elegí la instalación</p>${insts.map(carpeta).join('')}` : ''}
     ${pieLista()}</main>`;
   }
@@ -1349,9 +1350,9 @@ function corrCarpetas(){
   const L = CORR(), pend = L.filter(o => corrEstado(o) !== 'enviada'), nuevas = pend.filter(o => !E.vistas[o.ot]).length, C = E.cat.corrCerrar, K = E.cat.corrCurso || [];
   // Solo lo que tiene (JT, 17/11/2026): sin correctivas asignadas no aparece la carpeta; la del supervisor, solo con algo para cerrar o en curso
   const sup = C && (C.length || K.length);
-  if (!L.length && !sup) return '';
+  if (!pend.length && !sup) return ''; // sin correctivas pendientes (todas enviadas al supervisor), la carpeta se va
   return `<h2 style="margin:14px 0 2px">🔧 Mantenimiento correctivo</h2>
-  ${L.length ? `<button class="card carpeta corr" data-a="corr-lista"><div class="t"><span class="ico">🔧</span> Correctivos</div>
+  ${pend.length ? `<button class="card carpeta corr" data-a="corr-lista"><div class="t"><span class="ico">🔧</span> Correctivos</div>
     <div class="m">${pend.length ? `<b>${pend.length}</b> OT pendiente${pend.length === 1 ? '' : 's'}${nuevas ? ` · <span class="pill p-b">${nuevas} nueva${nuevas === 1 ? '' : 's'}</span>` : ''}` : '<span class="pill p-ok">✔ No tenés correctivos pendientes</span>'}</div></button>` : ''}
   ${sup ? `<button class="card carpeta" data-a="sup-lista" style="border-left:8px solid ${C.length ? '#0064d9' : '#2d8a4e'}"><div class="t"><span class="ico">✔</span> Supervisor · correctivos</div>
     <div class="m">${C.length ? `<b>${C.length}</b> para cerrar` : '<span class="pill p-ok">✔ Nada para cerrar</span>'}${K.length ? ` · ${K.length} en curso` : ''}</div></button>` : ''}`;
