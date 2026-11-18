@@ -933,8 +933,8 @@ function vInicioTec(){
         <div class="m">${n ? `<b>${n}</b> OT preventiva${n === 1 ? '' : 's'} por hacer` : '<span class="pill p-ok">✔ Todo hecho</span>'}</div></button>`; };
     return barra('Hola, ' + E.sesion.nombre, 'Mis OT · ' + esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + `<main>${aviso()}${avisoExt()}
     <button class="card hist-btn" data-a="h-abrir"><span class="ico">🔎</span><div><div class="t" style="font-size:16px">Historial de equipos</div><div class="m">Correctivos y preventivos · buscá por piso, instalación o equipo</div></div></button>
-    ${E.cat.sup ? `<h2 style="margin:14px 0 2px">✔ Supervisor</h2><button class="card carpeta" data-a="ps-abrir" style="border-left:8px solid #0064d9"><div class="t"><span class="ico">🗓️</span> Asignar preventivos</div>
-      <div class="m">OT de la semana sin técnico, o pasar a otro las que no se empezaron · necesita señal</div></button>` : ''}
+    ${E.cat.sup ? `<h2 style="margin:14px 0 2px">✔ Supervisor</h2><button class="card carpeta" data-a="ps-abrir" style="border-left:8px solid #0064d9"><div class="t"><span class="ico">🗓️</span> Preventivos · asignar y seguir</div>
+      <div class="m">Sin técnico, asignadas y cómo van las que están en curso · necesita señal</div></button>` : ''}
     ${corrCarpetas() || (insts.length || E.cat.sup ? '' : '<div class="aviso p-i">✔ No tenés OT pendientes. Cuando te asignen correctivos o preventivos, aparecen acá solas (con señal).</div>')}
     ${insts.length ? `<h2 style="margin:14px 0 2px">🗓️ Mantenimiento preventivo</h2><p class="m" style="margin:0 0 10px">Elegí la instalación</p>${insts.map(carpeta).join('')}` : ''}
     ${pieLista()}</main>`;
@@ -1549,7 +1549,19 @@ function vPrevSup(){
   <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:16px 0 6px"><h2 style="margin:0">Asignadas, sin empezar (${libres.length})</h2>${marcarTodas(libres, 'libres')}</div>
   <p class="m" style="margin:0 0 8px">Marcalas para pasarlas a otro técnico.</p>
   ${libres.length ? libres.map(o => tarjeta(o, '#0064d9')).join('') : '<p class="m">No hay.</p>'}
-  ${emp.length ? `<p class="m" style="margin:12px 0 0">${emp.length} OT ya empezada${emp.length === 1 ? '' : 's'}: si hay que pasarla${emp.length === 1 ? '' : 's'}, se hace desde el sistema.</p>` : ''}
+  <h2 style="margin:16px 0 6px">En curso (${emp.length})</h2>
+  <p class="m" style="margin:0 0 8px">Cómo van los técnicos. Cuando se termina, sale de esta lista. Tocá una para ver equipo por equipo.</p>
+  ${emp.length ? emp.map(o => { const a = o.av || { tot: 0, hechos: 0, mal: 0, eqs: [] }, pct = a.tot ? Math.round(a.hechos / a.tot * 100) : 0, ab = PS.abierta === o.id;
+    return `<div class="card" style="border-left:6px solid ${a.mal ? '#d93025' : '#2d8a4e'};margin-bottom:8px">
+      <button data-a="ps-ver" data-id="${esc(o.id)}" style="all:unset;display:block;width:100%;cursor:pointer">
+        <span class="t" style="display:block">${o.otn ? '<b>OT N° ' + esc(o.otn) + '</b> · ' : ''}${esc(o.nombre)}</span>
+        <span class="m" style="display:block">${esc([o.piso ? 'Piso ' + o.piso : '', INST_PS[o.inst] || o.inst, o.semanaTxt].filter(Boolean).join(' · '))} · 👤 ${esc(o.tec.join(', '))}</span>
+        <span style="display:flex;align-items:center;gap:8px;margin-top:6px"><b>${a.hechos} de ${a.tot}</b> equipos <span style="flex:1;height:8px;border-radius:4px;background:#e7ece9;overflow:hidden"><i style="display:block;height:100%;width:${pct}%;background:${a.mal ? '#e9730c' : '#2d8a4e'}"></i></span>${a.mal ? `<span class="pill" style="background:#fde2e1;color:#a3201b">✖ ${a.mal}</span>` : ''} ${ab ? '▲' : '▼'}</span></button>
+      ${ab ? `<div style="margin-top:8px;border-top:1px solid var(--line);padding-top:6px">${a.eqs.map(e => `<div style="padding:5px 0;border-bottom:1px solid #eef2f0;font-size:14px">
+        ${e.est === 'ok' ? '✔' : e.est === 'mal' ? '<span style="color:#d93025">✖</span>' : e.est === 'sin' ? '🚫' : '⏳'} <b>${esc(e.n)}</b>
+        <span class="m"> · ${e.est === 'pend' ? 'pendiente' : esc(e.tec) + (e.ts ? ' · ' + esc(e.ts.slice(8, 10) + '/' + e.ts.slice(5, 7) + ' ' + e.ts.slice(11, 16)) : '')}</span>
+        ${e.mal.map(m => `<div class="m" style="margin-left:18px;color:#a3201b">✖ ${esc(m)}</div>`).join('')}${e.est === 'sin' ? `<div class="m" style="margin-left:18px">Sin acceso${e.obs ? ': ' + esc(e.obs) : ''}</div>` : ''}</div>`).join('')}</div>` : ''}</div>`; }).join('')
+  : '<p class="m">No hay preventivos en curso.</p>'}
   <div class="card" style="position:sticky;bottom:0;margin-top:14px;box-shadow:0 -4px 14px rgba(0,0,0,.12)">
     <div class="t" style="margin-bottom:6px">Técnico${PS.tecs.length > 1 ? 's' : ''} para las ${nSel} marcada${nSel === 1 ? '' : 's'}</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">${D.plantel.map(t => `<label class="pill" style="font-size:15px;padding:8px 12px;cursor:pointer;${PS.tecs.includes(t.ini) ? 'background:var(--pri);color:#fff' : ''}"><input type="checkbox" data-ps-tec="${esc(t.ini)}" ${PS.tecs.includes(t.ini) ? 'checked' : ''} hidden>${esc(t.ini)}</label>`).join('')}</div>
@@ -1683,6 +1695,7 @@ document.addEventListener('click', async ev => {
   if (a === 'corr-terminar'){ corrTerminar(); return; }
   if (a === 'ps-abrir'){ E.pantalla = 'prevSup'; E.msg = ''; PS.datos = null; PS.sel = {}; dibujar(); window.scrollTo(0, 0); psCargar(); return; }
   if (a === 'ps-recargar'){ psCargar(); return; }
+  if (a === 'ps-ver'){ PS.abierta = PS.abierta === t.dataset.id ? '' : t.dataset.id; dibujar(); return; }
   if (a === 'ps-ed'){ PS.ed = t.dataset.ed; PS.sel = {}; dibujar(); return; }
   if (a === 'ps-todas'){ const D = PS.datos; if (!D) return; const L = D.ots.filter(o => o.ed === PS.ed && (!PS.inst || o.inst === PS.inst) && (t.dataset.k === 'sin' ? !o.tec.length : o.tec.length && !o.empezada));
     const todas = L.every(o => PS.sel[o.id]); L.forEach(o => { if (todas) delete PS.sel[o.id]; else PS.sel[o.id] = 1; }); dibujar(); return; }
