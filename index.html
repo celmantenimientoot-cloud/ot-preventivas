@@ -1379,7 +1379,7 @@ function vCorr(){
 function vCorrOt(){
   const o = CORR().find(x => x.ot === E.corrOt);
   if (!o){ E.pantalla = 'corr'; return vCorr(); }
-  const est = corrEstado(o), foto = E.corrFoto[o.ot], vid = (E.corrVideo || {})[o.ot]; // al técnico no se le muestra el tiempo que lleva (JT: que no se sienta controlado); sí el tiempo estimado que puso el supervisor
+  const est = corrEstado(o), fotos = [E.corrFoto[o.ot], (E.corrFoto2 || {})[o.ot]].filter(Boolean), vid = (E.corrVideo || {})[o.ot]; // al técnico no se le muestra el tiempo que lleva (JT: que no se sienta controlado); sí el tiempo estimado que puso el supervisor
   const cuerpo = est === 'enviada' ? `<div class="aviso p-i">La terminaste: está en manos del supervisor, que la revisa y la cierra (o te la devuelve con un motivo).</div>`
   : est === 'nueva' || est === 'devuelta' ? `${est === 'devuelta' ? `<div class="aviso err"><b>Devuelta por el supervisor:</b> ${esc(o.st.motivo)}</div>` : ''}
     <button class="big" data-a="corr-empezar" style="background:var(--ok)">▶ Empezar el trabajo</button>
@@ -1387,10 +1387,11 @@ function vCorrOt(){
   : est === 'pausa' ? `<div class="aviso p-w">⏸ <b>Pausada por el supervisor.</b> Cuando la reanude, seguís.</div>`
   : `<p style="margin:0"><span class="pill p-ok">En curso</span></p>
     <label class="f">Qué hiciste<textarea id="corr-com" rows="3" maxlength="1000" placeholder="Ej.: se cambió el tubo y se probó el encendido">${esc((E.corrCom || {})[o.ot] || '')}</textarea></label>
-    <div style="font-size:14px;color:var(--muted);margin:10px 0 4px">Foto (opcional): sacala ahora o elegí una que ya sacaste</div>
-    <div style="display:flex;gap:8px"><label class="btn" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px">📷 ${foto ? 'Sacar otra' : 'Sacar foto'}<input id="corr-foto" type="file" accept="image/*" capture="environment" hidden></label>
-      <label class="btn" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px">🖼️ De la galería<input id="corr-foto-gal" type="file" accept="image/*" hidden></label></div>
-    ${foto ? `<img src="${foto}" alt="Foto cargada" style="max-width:180px;border-radius:9px;border:1px solid var(--line)">` : ''}
+    <div style="font-size:14px;color:var(--muted);margin:10px 0 4px">Fotos (opcional, hasta 2): sacalas ahora o elegí de la galería</div>
+    ${fotos.length ? `<div style="display:flex;gap:8px;margin-bottom:8px">${fotos.map((f, i) => `<div style="position:relative;flex:1;max-width:48%"><img src="${f}" alt="Foto ${i + 1}" style="width:100%;max-height:160px;object-fit:cover;border-radius:9px;border:1px solid var(--line)">
+      <button class="btn" data-a="corr-foto-quitar" data-i="${i}" style="position:absolute;top:4px;right:4px;min-height:32px;padding:0 10px;background:rgba(255,255,255,.92)">✕</button></div>`).join('')}</div>` : ''}
+    ${fotos.length < 2 ? `<div style="display:flex;gap:8px"><label class="btn" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px">📷 ${fotos.length ? 'Sacar otra' : 'Sacar foto'}<input id="corr-foto" type="file" accept="image/*" capture="environment" hidden></label>
+      <label class="btn" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px">🖼️ De la galería<input id="corr-foto-gal" type="file" accept="image/*" hidden></label></div>` : '<p class="m" style="margin:0">Ya cargaste 2 fotos (el máximo). Para cambiar una, quitala con ✕.</p>'}
     ${true ? (vid ? `<video class="vid-min" src="${vid.url}" controls playsinline></video><button class="btn" data-a="corr-video-quitar" style="width:100%;margin-top:6px">✕ Quitar el video</button>`
       : `<div style="display:flex;gap:8px;margin-top:10px">${puedeVideo() ? `<button class="btn" data-a="corr-video" style="flex:1">🎥 Grabar video</button>` : ''}
         <label class="btn" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px">🎞️ Video de la galería<input id="corr-vid-gal" type="file" accept="video/*" hidden></label></div>
@@ -1416,7 +1417,7 @@ async function corrTerminar(){
   const r = E.reloj[o.ot] || {}, ini = r.inicio || (o.st && o.st.inicio) || '', fin = ahoraIso();
   const min = ini ? Math.max(1, Math.ceil((new Date(fin) - new Date(ini)) / 60000)) : 1; // por si no llegó el inicio al sistema: el que manda es el del sistema
   const vb = (E.corrVideo || {})[o.ot], video = vb ? await blobDataUrl(vb.blob) : '';
-  await DB.encolar({ uid: nuevoUid(), ts: fin, tipo: 'CORR', ev: 'fin', ot: o.ot, com, foto: E.corrFoto[o.ot] || '', video, inicio: ini, fin, min, tec: E.sesion.id });
+  await DB.encolar({ uid: nuevoUid(), ts: fin, tipo: 'CORR', ev: 'fin', ot: o.ot, com, foto: E.corrFoto[o.ot] || '', foto2: (E.corrFoto2 || {})[o.ot] || '', video, inicio: ini, fin, min, tec: E.sesion.id });
   if (vb){ URL.revokeObjectURL(vb.url); delete E.corrVideo[o.ot]; }
   delete E.reloj[o.ot]; delete E.corrFoto[o.ot]; if (E.corrCom) delete E.corrCom[o.ot]; await DB.set('reloj', E.reloj);
   o.st = Object.assign({}, o.st || {}, { estado: 'terminada' }); E.cola = await DB.cola(); E.msg = '';
@@ -1427,7 +1428,9 @@ function corrFotoElegida(input){
   const img = new Image(), url = URL.createObjectURL(f);
   img.onload = () => { const m = 1024, k = Math.min(1, m / Math.max(img.width, img.height)), cv = document.createElement('canvas');
     cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k); cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-    E.corrFoto[E.corrOt] = cv.toDataURL('image/jpeg', 0.7); URL.revokeObjectURL(url); dibujar(); };
+    const d = cv.toDataURL('image/jpeg', 0.7); E.corrFoto2 = E.corrFoto2 || {};
+    if (!E.corrFoto[E.corrOt]) E.corrFoto[E.corrOt] = d; else if (!E.corrFoto2[E.corrOt]) E.corrFoto2[E.corrOt] = d; else toast('Ya hay 2 fotos: quitá una para cambiarla');
+    URL.revokeObjectURL(url); input.value = ''; dibujar(); };
   img.src = url;
 }
 // ---- Video corto de la correctiva (JT, 17/11/2026): se graba dentro de la app, hasta VID_SEG s, en calidad liviana
@@ -1551,7 +1554,7 @@ function vCorrSup(){
   ${tecs.length > 1 ? `<label class="f" style="margin-bottom:10px">Técnico<select id="sup-tec"><option value="">Todos</option>${tecs.map(x => `<option ${x === E.supTec ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>` : ''}
   <h2 style="margin:4px 0 6px">Para cerrar (${C.length})</h2>
   ${C.length ? C.map(o => `<button class="card" data-a="sup-ot" data-ot="${esc(o.ot)}" style="text-align:left;width:100%;cursor:pointer">
-    <div class="t"><b>OT ${esc(o.ot)}</b> ${critPill(o.crit)} ${o.st.foto ? '<span class="pill p-i">Con foto</span>' : ''}</div><div style="margin:4px 0">${esc(o.desc)}</div>
+    <div class="t"><b>OT ${esc(o.ot)}</b> ${critPill(o.crit)} ${o.st.foto ? `<span class="pill p-i">${o.st.foto2 ? '2 fotos' : 'Con foto'}</span>` : ''}</div><div style="margin:4px 0">${esc(o.desc)}</div>
     <div class="m">${esc(o.st.tec)} · <b>${o.st.min} min</b>${o.est ? ` · estimado ${o.est} min ${dif(o) > 0 ? `<span class="pill p-w">+${dif(o)} min</span>` : '<span class="pill p-ok">dentro</span>'}` : ''}</div></button>`).join('')
   : '<div class="aviso p-ok">✔ No hay OT para cerrar.</div>'}
   <h2 style="margin:16px 0 6px">En curso (${K.length})</h2>
@@ -1589,7 +1592,7 @@ function vCorrSupOt(){
   <div class="card"><div class="t" style="font-size:17px">${esc(o.desc)}</div><div class="m">${esc([o.ed, pisoTxt(o.piso), o.eq].filter(Boolean).join(' · '))} · ${critPill(o.crit)}</div></div>
   <div class="card"><div class="kv">${[['Técnico', esc(st.tec)], ['Tiempo', `<b>${st.min} min</b>${st.inicio ? ` · de ${esc(st.inicio.slice(11, 16))} a ${esc(String(st.fin).slice(11, 16))}` : ''}${st.pausas ? ` · ${st.pausas} pausa(s)` : ''}`],
     ['Estimado', o.est ? `${o.est} min ${d > 0 ? `<span class="pill p-w">+${d} min</span>` : '<span class="pill p-ok">dentro</span>'}` : '–'], ['Qué hizo', esc(st.com)]].map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>
-    ${fotoMin(st.foto)}${st.video ? `<a class="btn" href="${esc(st.video)}" target="_blank" rel="noopener" style="display:block;text-align:center;margin-top:8px">🎥 Ver video</a>` : ''}</div>
+    ${fotoMin(st.foto)}${fotoMin(st.foto2)}${st.video ? `<a class="btn" href="${esc(st.video)}" target="_blank" rel="noopener" style="display:block;text-align:center;margin-top:8px">🎥 Ver video</a>` : ''}</div>
   <label class="f">Tiempo validado (min) · el sistema contó ${st.min} min<input id="sup-min" type="number" min="1" inputmode="numeric" value="${st.min}"></label>
   <button class="big" data-a="sup-cerrar" style="background:var(--ok)" ${E.online ? '' : 'disabled'}>Cerrar como realizada</button>
   <button class="btn" data-a="sup-relevante" style="width:100%;margin-top:8px" ${E.online ? '' : 'disabled'}>★ Cerrar y guardar como relevante</button>
@@ -1630,6 +1633,7 @@ document.addEventListener('click', async ev => {
   const a = t.dataset.a;
   if (a === 'foto-ver'){ abrirVisor(t.dataset.src); return; }
   if (a === 'corr-video'){ vidAbrir(); return; }
+  if (a === 'corr-foto-quitar'){ const ot = E.corrOt; E.corrFoto2 = E.corrFoto2 || {}; if (t.dataset.i === '0'){ E.corrFoto[ot] = E.corrFoto2[ot] || ''; } delete E.corrFoto2[ot]; if (!E.corrFoto[ot]) delete E.corrFoto[ot]; dibujar(); return; }
   if (a === 'corr-video-quitar'){ const v = (E.corrVideo || {})[E.corrOt]; if (v && confirm('¿Quitar el video?')){ URL.revokeObjectURL(v.url); delete E.corrVideo[E.corrOt]; dibujar(); } return; }
   if (a === 'gv-grabar'){ vidGrabar(); return; }
   if (a === 'gv-parar'){ vidParar(); return; }
