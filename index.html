@@ -1390,8 +1390,10 @@ function vCorrOt(){
     <div style="display:flex;gap:8px"><label class="btn" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px">📷 ${foto ? 'Sacar otra' : 'Sacar foto'}<input id="corr-foto" type="file" accept="image/*" capture="environment" hidden></label>
       <label class="btn" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px">🖼️ De la galería<input id="corr-foto-gal" type="file" accept="image/*" hidden></label></div>
     ${foto ? `<img src="${foto}" alt="Foto cargada" style="max-width:180px;border-radius:9px;border:1px solid var(--line)">` : ''}
-    ${puedeVideo() ? (vid ? `<video class="vid-min" src="${vid.url}" controls playsinline></video><button class="btn" data-a="corr-video-quitar" style="width:100%;margin-top:6px">✕ Quitar el video</button>`
-      : `<button class="btn" data-a="corr-video" style="width:100%;margin-top:10px">🎥 Grabar video (opcional, hasta ${VID_SEG} s)</button>`) : ''}
+    ${true ? (vid ? `<video class="vid-min" src="${vid.url}" controls playsinline></video><button class="btn" data-a="corr-video-quitar" style="width:100%;margin-top:6px">✕ Quitar el video</button>`
+      : `<div style="display:flex;gap:8px;margin-top:10px">${puedeVideo() ? `<button class="btn" data-a="corr-video" style="flex:1">🎥 Grabar video</button>` : ''}
+        <label class="btn" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px">🎞️ Video de la galería<input id="corr-vid-gal" type="file" accept="video/*" hidden></label></div>
+        <p class="m" style="margin:4px 0 0">Opcional. Grabado: hasta ${VID_SEG} s. De la galería: corto, hasta ${VID_GAL_MB} MB.</p>`) : ''}
     <button class="big" data-a="corr-terminar">Terminada</button>
     <p class="m" style="margin:0">Terminada no cierra la OT: va al supervisor para que la revise. Sin señal, se envía sola cuando vuelve.</p>`;
   return barra('OT ' + esc(o.ot), esc(o.ed), '<button data-a="corr-lista">‹ Correctivos</button>') + `<main>${aviso()}
@@ -1430,6 +1432,20 @@ function corrFotoElegida(input){
 // ---- Video corto de la correctiva (JT, 17/11/2026): se graba dentro de la app, hasta VID_SEG s, en calidad liviana
 // (~1,2 Mbit/s, unos 2 MB) para que se envíe rápido con datos. Sin señal queda guardado y se envía solo, como la foto.
 const VID_SEG = 15;
+// Video elegido de la galería (JT, 18/11/2026): como la foto. Se envía tal cual, así que va con tope de peso
+const VID_GAL_MB = 20;
+function corrVideoGaleria(input){
+  const f = input.files && input.files[0]; input.value = ''; if (!f) return;
+  const ext = (String(f.name).match(/\.(\w+)$/) || [, ''])[1].toLowerCase();
+  const tipo = /^video\/(mp4|webm|quicktime)$/.test(f.type) ? f.type : { mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime' }[ext] || '';
+  if (!tipo){ toast('Ese formato de video no se puede enviar: grabalo desde la app'); return; }
+  if (f.size > VID_GAL_MB * 1e6){ toast('El video pesa ' + Math.round(f.size / 1e6) + ' MB: elegí uno más corto (hasta ' + VID_GAL_MB + ' MB) o grabalo desde la app'); return; }
+  const blob = f.type === tipo ? f : new Blob([f], { type: tipo }), ot = E.corrOt;
+  E.corrVideo = E.corrVideo || {};
+  if (E.corrVideo[ot]) URL.revokeObjectURL(E.corrVideo[ot].url);
+  E.corrVideo[ot] = { blob, url: URL.createObjectURL(blob) };
+  dibujar(); toast('Video listo: se envía al tocar Terminada');
+}
 const VID = { stream: null, rec: null, partes: [], timer: null, fin: 0 };
 const puedeVideo = () => !!(window.MediaRecorder && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 const vidTipo = () => ['video/mp4;codecs=avc1,mp4a', 'video/mp4', 'video/webm;codecs=vp8,opus', 'video/webm'].find(t => { try { return MediaRecorder.isTypeSupported(t); } catch (e) { return false; } }) || '';
@@ -1789,6 +1805,7 @@ document.addEventListener('change', ev => {
   if (kf){ E[kf] = el.value; dibujar(); return; }
   if (el.id === 'l-bomb' && el.value){ E.bomberoPin = el.value; E.pin = ''; E.msg = ''; dibujar(); }
   if (el.id === 'c-foto') fotoElegida(el);
+  if (el.id === 'corr-vid-gal') corrVideoGaleria(el);
   if (el.id === 'corr-foto' || el.id === 'corr-foto-gal') corrFotoElegida(el); // cámara o galería (JT, 18/11/2026)
   if (el.dataset.psOt){ if (el.checked) PS.sel[el.dataset.psOt] = 1; else delete PS.sel[el.dataset.psOt]; dibujar(); return; }
   if (el.dataset.psTec){ const i = el.dataset.psTec; PS.tecs = el.checked ? PS.tecs.concat(i) : PS.tecs.filter(x => x !== i); dibujar(); return; }
