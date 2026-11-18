@@ -1654,7 +1654,8 @@ document.addEventListener('click', async ev => {
     const todas = L.every(o => PS.sel[o.id]); L.forEach(o => { if (todas) delete PS.sel[o.id]; else PS.sel[o.id] = 1; }); dibujar(); return; }
   if (a === 'ps-asignar'){ const ids = Object.keys(PS.sel).filter(id => (PS.datos.ots.find(o => o.id === id) || {}).ed === PS.ed);
     if (!ids.length || !PS.tecs.length) return;
-    if (!confirm('¿Asignar ' + ids.length + ' OT a ' + PS.tecs.join(', ') + '?')) return;
+    const muchas = ids.length >= 10 ? '\n\n⚠ Son MUCHAS OT (' + ids.length + '). Revisá que sea el edificio y la semana correctos.' : '';
+    if (!confirm('¿Asignar ' + ids.length + ' OT de ' + PS.ed + ' a ' + PS.tecs.join(', ') + '?' + muchas)) return;
     psCargar({ accion: 'asignar', ids, tecs: PS.tecs }); return; }
   if (a === 'sup-lista'){ E.pantalla = 'corrSup'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'sup-ot'){ E.supOt = t.dataset.ot; E.pantalla = 'corrSupOt'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
