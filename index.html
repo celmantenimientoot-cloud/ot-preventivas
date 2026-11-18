@@ -1382,7 +1382,9 @@ function vCorrOt(){
   : est === 'pausa' ? `<div class="aviso p-w">⏸ <b>Pausada por el supervisor.</b> Cuando la reanude, seguís.</div>`
   : `<p style="margin:0"><span class="pill p-ok">En curso</span></p>
     <label class="f">Qué hiciste<textarea id="corr-com" rows="3" maxlength="1000" placeholder="Ej.: se cambió el tubo y se probó el encendido">${esc((E.corrCom || {})[o.ot] || '')}</textarea></label>
-    <label class="f">Foto (opcional)<input id="corr-foto" type="file" accept="image/*" capture="environment"></label>
+    <div style="font-size:14px;color:var(--muted);margin:10px 0 4px">Foto (opcional): sacala ahora o elegí una que ya sacaste</div>
+    <div style="display:flex;gap:8px"><label class="btn" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px">📷 ${foto ? 'Sacar otra' : 'Sacar foto'}<input id="corr-foto" type="file" accept="image/*" capture="environment" hidden></label>
+      <label class="btn" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px">🖼️ De la galería<input id="corr-foto-gal" type="file" accept="image/*" hidden></label></div>
     ${foto ? `<img src="${foto}" alt="Foto cargada" style="max-width:180px;border-radius:9px;border:1px solid var(--line)">` : ''}
     ${puedeVideo() ? (vid ? `<video class="vid-min" src="${vid.url}" controls playsinline></video><button class="btn" data-a="corr-video-quitar" style="width:100%;margin-top:6px">✕ Quitar el video</button>`
       : `<button class="btn" data-a="corr-video" style="width:100%;margin-top:10px">🎥 Grabar video (opcional, hasta ${VID_SEG} s)</button>`) : ''}
@@ -1729,7 +1731,7 @@ document.addEventListener('change', ev => {
   if (kf){ E[kf] = el.value; dibujar(); return; }
   if (el.id === 'l-bomb' && el.value){ E.bomberoPin = el.value; E.pin = ''; E.msg = ''; dibujar(); }
   if (el.id === 'c-foto') fotoElegida(el);
-  if (el.id === 'corr-foto') corrFotoElegida(el);
+  if (el.id === 'corr-foto' || el.id === 'corr-foto-gal') corrFotoElegida(el); // cámara o galería (JT, 18/11/2026)
   if (el.id === 'sup-tec'){ E.supTec = el.value; dibujar(); return; }
   if (el.id === 'sv-tipo'){ E.sv.tipo = el.value; dibujar(); }
   if (el.id === 'sv-tablet'){ E.sv.tablet = el.value; dibujar(); }
