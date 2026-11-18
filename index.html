@@ -904,11 +904,13 @@ const rutPill = k => `<span class="pill" style="background:${RUT_TXT[k][1]};colo
 // Escaleras: cada una está pintada de un color y los técnicos la recuerdan por el color (JT, 04/11/2026)
 const ESC_COL = { 1: ['amarilla', '#f2c500', '#3d3200'], 2: ['gris', '#8f9599', '#ffffff'], 3: ['violeta', '#7e4fbf', '#ffffff'],
   4: ['azul', '#2f6fd6', '#ffffff'], 5: ['roja', '#cf3434', '#ffffff'], 6: ['verde', '#2e9a4e', '#ffffff'] };
-function escalerasDe(txt){
-  const t = String(txt || ''), m = t.match(/escalera\s*(\d)/i), m2 = t.match(/ESC-?(\d(?:\/\d)*)/i);
-  return [...new Set((m ? [m[1]] : m2 ? m2[1].split('/') : []).map(Number).filter(n => ESC_COL[n]))];
+// CEN tiene otros colores (hojas del plan eléctrico CEN: 10.1 azul, 10.2 violeta, 10.3 roja; la 4 es la comercial, sin color)
+const ESC_COL_CEN = { 1: ESC_COL[4], 2: ESC_COL[3], 3: ESC_COL[5] };
+function escalerasDe(txt, ed){
+  const t = String(txt || ''), m = t.match(/escalera\s*(\d)/i), m2 = t.match(/ESC-?(\d(?:\/\d)*)/i), C = ed === 'CEN' ? ESC_COL_CEN : ESC_COL;
+  return [...new Set((m ? [m[1]] : m2 ? m2[1].split('/') : []).map(Number).filter(n => C[n]))].map(n => [n, C[n]]);
 }
-const escPill = n => `<span class="pill" style="background:${ESC_COL[n][1]};color:${ESC_COL[n][2]}">Escalera ${n} · ${ESC_COL[n][0]}</span>`;
+const escPill = ([n, c]) => `<span class="pill" style="background:${c[1]};color:${c[2]}">Escalera ${n} · ${c[0]}</span>`;
 function rutinasOt(o, ru){
   const r = new Set(Object.values(o.tipos || {}).filter(t => RUT_TXT[t]));
   if (o.anual) r.add('A');
@@ -962,7 +964,7 @@ function vInicioTec(){
     const pill = o.estado === 'hecha' ? '<span class="pill p-ok">Hecha</span>' : h === t ? '<span class="pill p-w">Completa · sin enviar</span>'
       : h ? `<span class="pill p-w">En curso · ${h} de ${t}</span>` : '';
     return `<button class="card" data-a="abrir-ot" data-id="${esc(o.id)}" style="text-align:left;width:100%;cursor:pointer">
-      <div class="t">${o.piso ? `<span class="piso">PISO ${esc(o.piso)}</span> · ` : ''}${otNum(ru.def) ? '<b>OT N° ' + esc(otNum(ru.def)) + '</b> · ' : ''}${esc(titPlan(ru.def, o.nombre))} ${escalerasDe(o.nombre).map(escPill).join(' ')} ${rutinasOt(o, ru).map(rutPill).join(' ')} ${pill}</div>
+      <div class="t">${o.piso ? `<span class="piso">PISO ${esc(o.piso)}</span> · ` : ''}${otNum(ru.def) ? '<b>OT N° ' + esc(otNum(ru.def)) + '</b> · ' : ''}${esc(titPlan(ru.def, o.nombre))} ${escalerasDe(o.nombre, o.ed).map(escPill).join(' ')} ${rutinasOt(o, ru).map(rutPill).join(' ')} ${pill}</div>
       <div class="m">${esc(o.semanaTxt)} · ${esc(tipoDe(o))} · ${t} equipo${t === 1 ? '' : 's'}${sinEnviar ? ' · hay equipos sin enviar' : ''}</div>
       ${(o.con || []).length ? `<div class="m">Con: <b>${esc(o.con.join(', '))}</b></div>` : ''}
       ${o.estado === 'hecha' ? '' : `<div class="prog"><i style="width:${t ? Math.round(h / t * 100) : 0}%"></i></div>`}</button>`;
@@ -1041,7 +1043,7 @@ function vOt(){
   const listo = hE === nE;
   return barra((o.piso ? 'PISO ' + o.piso + ' · ' : '') + (otNum(ru.def) ? 'OT N° ' + otNum(ru.def) + ' · ' : '') + titPlan(ru.def, o.nombre), esc(o.semanaTxt), '<button data-a="inicio">Volver</button>') + `<main>
   ${o.estado === 'hecha' ? '<div class="aviso p-i">Esta OT ya está terminada. Si hay que corregir algo, avisá al supervisor.</div>' : ''}
-  ${escalerasDe(o.nombre).length ? `<div class="aviso" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${escalerasDe(o.nombre).map(escPill).join('')}</div>` : ''}
+  ${escalerasDe(o.nombre, o.ed).length ? `<div class="aviso" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${escalerasDe(o.nombre, o.ed).map(escPill).join('')}</div>` : ''}
   ${(() => { const R = rutinasOt(o, ru); if (!R.length || o.estado === 'hecha') return '';
       const n = k => Object.values(o.tipos || {}).filter(t => t === k).length;
       return `<div class="aviso p-w">Esta OT incluye rutina ${R.map(k => rutPill(k) + (n(k) ? ` en ${n(k)} equipo${n(k) === 1 ? '' : 's'}` : '')).join(' · ')}: además de lo mensual, aparecen esas tareas.</div>`; })()}
