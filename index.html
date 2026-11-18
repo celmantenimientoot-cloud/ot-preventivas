@@ -207,7 +207,7 @@ async function enviar(cuerpo){
 const conClave = c => Object.assign({ tablet: E.tablet.id, clave: E.tablet.clave }, c);
 async function guardarCatalogo(j){
   E.cat = { ahora: j.ahora, equipos: j.equipos, rutinas: j.rutinas, tipos: j.tipos, motivos: j.motivos || {}, hechos: j.hechos || {}, por: j.por || {}, abiertas: j.abiertas || {}, rondas: j.rondas || null, bomberos: j.bomberos, bajado: ahoraIso(),
-    modo: j.modo || '', termo: j.termo || null, deposito: j.deposito || '', corr: j.corr || [], corrCerrar: j.corrCerrar || null, corrCurso: j.corrCurso || null, sup: !!j.sup };
+    modo: j.modo || '', termo: j.termo || null, deposito: j.deposito || '', corr: j.corr || [], corrCerrar: j.corrCerrar || null, corrCurso: j.corrCurso || null, sup: !!j.sup, ext: j.ext || [] };
   (E.cola || []).forEach(r => depLocal(r)); // lo del depósito que todavía no se envió
   (E.cola || []).filter(r => r.manga).forEach(r => { const eq = (E.cat.equipos || []).find(e => esNicho(e) && e.pos === r.pos); if (eq) mangaLocal(eq, r.manga, r.ts); });
   await DB.set('catalogo', E.cat);
@@ -931,7 +931,7 @@ function vInicioTec(){
       return `<button class="card carpeta" data-a="inst" data-k="${k}" style="border-left:8px solid ${n ? I.col : '#2d8a4e'}">
         <div class="t"><span class="ico">${I.ico}</span> ${I.nom}</div>
         <div class="m">${n ? `<b>${n}</b> OT preventiva${n === 1 ? '' : 's'} por hacer` : '<span class="pill p-ok">✔ Todo hecho</span>'}</div></button>`; };
-    return barra('Hola, ' + E.sesion.nombre, 'Mis OT · ' + esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + `<main>${aviso()}
+    return barra('Hola, ' + E.sesion.nombre, 'Mis OT · ' + esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + `<main>${aviso()}${avisoExt()}
     <button class="card hist-btn" data-a="h-abrir"><span class="ico">🔎</span><div><div class="t" style="font-size:16px">Historial de equipos</div><div class="m">Correctivos y preventivos · buscá por piso, instalación o equipo</div></div></button>
     ${E.cat.sup ? `<h2 style="margin:14px 0 2px">✔ Supervisor</h2><button class="card carpeta" data-a="ps-abrir" style="border-left:8px solid #0064d9"><div class="t"><span class="ico">🗓️</span> Asignar preventivos</div>
       <div class="m">OT de la semana sin técnico, o pasar a otro las que no se empezaron · necesita señal</div></button>` : ''}
@@ -1346,6 +1346,19 @@ const corrDesde = o => { const t = (o.st && o.st.estado === 'en curso' && o.st.t
 const critCol = c => ({ A: ['#fde2e1', '#a3201b'], B: ['#fdebd6', '#8f4a00'], C: ['#fbf3c9', '#5c4b00'] }[String(c || '').trim().toUpperCase()] || ['#e6ebe9', '#3a4a45']);
 const critPill = c => c ? `<span class="pill" style="background:${critCol(c)[0]};color:${critCol(c)[1]}">Crit. ${esc(c)}</span>` : '';
 const nuevoUid = () => E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+// Aviso de extensión de A.A. (JT, 18/11/2026): desde un día antes y hasta que termina; se va solo aunque no haya señal
+function avisoExt(){
+  const p = n => String(n).padStart(2, '0'), d = new Date(), iso = x => x.getFullYear() + '-' + p(x.getMonth() + 1) + '-' + p(x.getDate()) + 'T' + p(x.getHours()) + ':' + p(x.getMinutes());
+  const ahora = iso(d), hoy = ahora.slice(0, 10), man = iso(new Date(Date.now() + 864e5)).slice(0, 10);
+  const L = ((E.cat && E.cat.ext) || []).filter(x => x.fin > ahora && x.ini <= iso(new Date(Date.now() + 864e5)));
+  if (!L.length) return '';
+  const dia = t => { const f = t.slice(0, 10); return (f === hoy ? 'hoy' : f === man ? 'mañana' : f.slice(8, 10) + '/' + f.slice(5, 7)) + ' ' + t.slice(11, 16); };
+  return L.map(x => { const ya = x.ini <= ahora;
+    return `<div class="card" style="border-left:8px solid #e9730c;background:#fff8f0;margin-bottom:10px">
+      <div class="t" style="font-size:16px">🌙 Extensión de A.A. · <b>${esc(x.inq)}</b> ${ya ? '<span class="pill" style="background:#e9730c;color:#fff">En curso</span>' : ''}</div>
+      <div style="margin:4px 0;font-size:15px"><b>${esc(dia(x.ini))}</b> → <b>${esc(dia(x.fin))}</b>${x.uta ? ` · ${esc(x.uta)} UTA` : ''}</div>
+      <div class="m">Mantener <b>UN solo chiller</b> encendido: es fuera del horario operativo y son pocas UTA (aunque en verano suelan estar los 2).${x.nota ? '<br>' + esc(x.nota) : ''}</div></div>`; }).join('');
+}
 function corrCarpetas(){
   const L = CORR(), pend = L.filter(o => corrEstado(o) !== 'enviada'), nuevas = pend.filter(o => !E.vistas[o.ot]).length, C = E.cat.corrCerrar, K = E.cat.corrCurso || [];
   // Solo lo que tiene (JT, 17/11/2026): sin correctivas asignadas no aparece la carpeta; la del supervisor, solo con algo para cerrar o en curso
