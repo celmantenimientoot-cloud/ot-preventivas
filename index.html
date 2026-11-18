@@ -1527,7 +1527,7 @@ async function psCargar(cuerpo){
   PS.cargando = false; dibujar();
 }
 function vPrevSup(){
-  const D = PS.datos, cab = barra('🗓️ Asignar preventivos', 'Supervisor · ' + esc(E.sesion.nombre), '<button data-a="corr-volver">‹ Carpetas</button>');
+  const D = PS.datos, cab = barra('🗓️ Preventivos', 'Supervisor · ' + esc(E.sesion.nombre), '<button data-a="corr-volver">‹ Carpetas</button>');
   if (!D) return cab + `<main>${aviso()}<p class="o">${PS.cargando ? 'Cargando las OT…' : E.online ? '' : 'Sin señal: para asignar hace falta conexión.'}</p>${!PS.cargando ? '<button class="btn" data-a="ps-recargar" style="width:100%">Cargar</button>' : ''}</main>`;
   const eds = [...new Set(D.ots.map(o => o.ed))].sort(); if (!eds.includes(PS.ed)) PS.ed = eds.includes(E.tablet.ed) ? E.tablet.ed : eds[0] || '';
   const deEd = D.ots.filter(o => o.ed === PS.ed), insts = [...new Set(deEd.map(o => o.inst))].sort(); if (PS.inst && !insts.includes(PS.inst)) PS.inst = '';
@@ -1541,33 +1541,41 @@ function vPrevSup(){
     <span class="m" style="display:block">${esc([o.piso ? 'Piso ' + o.piso : '', INST_PS[o.inst] || o.inst, o.semanaTxt].filter(Boolean).join(' · '))}</span>
     ${o.tec.length ? `<span class="m" style="display:block">👤 ${esc(o.tec.join(', '))}</span>` : '<span class="pill" style="background:#fde2e1;color:#a3201b;margin-top:4px">Sin técnico</span>'}</span></label>`;
   const marcarTodas = (lista, k) => lista.length ? `<button class="btn" data-a="ps-todas" data-k="${k}" style="min-height:36px;padding:0 12px;font-size:14px">${lista.every(o => PS.sel[o.id]) ? 'Desmarcar todas' : 'Marcar todas'}</button>` : '';
-  return cab + `<main>${aviso()}
-  ${eds.length > 1 ? `<div class="seg" style="margin-bottom:10px">${eds.map(e => `<button data-a="ps-ed" data-ed="${e}" aria-pressed="${e === PS.ed}">🏢 ${e}</button>`).join('')}</div>` : ''}
-  ${insts.length > 1 ? `<label class="f" style="margin-bottom:10px">Instalación<select id="ps-inst"><option value="">Todas</option>${insts.map(i => `<option value="${esc(i)}" ${i === PS.inst ? 'selected' : ''}>${esc(INST_PS[i] || i)}</option>`).join('')}</select></label>` : ''}
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:4px 0 6px"><h2 style="margin:0">Sin técnico (${sin.length})</h2>${marcarTodas(sin, 'sin')}</div>
-  ${sin.length ? sin.map(o => tarjeta(o, '#d93025')).join('') : '<div class="aviso p-ok">✔ Todas tienen técnico.</div>'}
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:16px 0 6px"><h2 style="margin:0">Asignadas, sin empezar (${libres.length})</h2>${marcarTodas(libres, 'libres')}</div>
-  <p class="m" style="margin:0 0 8px">Marcalas para pasarlas a otro técnico.</p>
-  ${libres.length ? libres.map(o => tarjeta(o, '#0064d9')).join('') : '<p class="m">No hay.</p>'}
-  <h2 style="margin:16px 0 6px">En curso (${emp.length})</h2>
-  <p class="m" style="margin:0 0 8px">Cómo van los técnicos. Cuando se termina, sale de esta lista. Tocá una para ver equipo por equipo.</p>
-  ${emp.length ? emp.map(o => { const a = o.av || { tot: 0, hechos: 0, mal: 0, eqs: [] }, pct = a.tot ? Math.round(a.hechos / a.tot * 100) : 0, ab = PS.abierta === o.id;
-    return `<div class="card" style="border-left:6px solid ${a.mal ? '#d93025' : '#2d8a4e'};margin-bottom:8px">
+  // Dos solapas (JT, 18/11/2026): Asignar = solo la semana en curso sin técnico; Seguimiento = lo asignado de esta semana
+  // y lo atrasado de semanas anteriores, con su avance. Semanas futuras no se muestran; lo terminado sale solo.
+  const semH = D.semHoy || '', esta = o => !semH || o.semana === semH, pasada = o => semH && o.semana < semH;
+  const aAsig = L.filter(o => !o.tec.length && esta(o));
+  const seg = L.filter(o => esta(o) ? o.tec.length : pasada(o)), segH = seg.filter(esta), segA = seg.filter(pasada);
+  const vista = PS.vista === 'seg' ? 'seg' : 'asig';
+  const tarjetaSeg = o => { const a = o.av || { tot: 0, hechos: 0, mal: 0, eqs: [] }, pct = a.tot ? Math.round(a.hechos / a.tot * 100) : 0, ab = PS.abierta === o.id;
+    const col = !o.tec.length ? '#d93025' : a.mal ? '#d93025' : o.empezada ? '#2d8a4e' : '#0064d9';
+    return `<div class="card" style="border-left:6px solid ${col};margin-bottom:8px">
       <button data-a="ps-ver" data-id="${esc(o.id)}" style="all:unset;display:block;width:100%;cursor:pointer">
         <span class="t" style="display:block">${o.otn ? '<b>OT N° ' + esc(o.otn) + '</b> · ' : ''}${esc(o.nombre)}</span>
-        <span class="m" style="display:block">${esc([o.piso ? 'Piso ' + o.piso : '', INST_PS[o.inst] || o.inst, o.semanaTxt].filter(Boolean).join(' · '))} · 👤 ${esc(o.tec.join(', '))}</span>
-        <span style="display:flex;align-items:center;gap:8px;margin-top:6px"><b>${a.hechos} de ${a.tot}</b> equipos <span style="flex:1;height:8px;border-radius:4px;background:#e7ece9;overflow:hidden"><i style="display:block;height:100%;width:${pct}%;background:${a.mal ? '#e9730c' : '#2d8a4e'}"></i></span>${a.mal ? `<span class="pill" style="background:#fde2e1;color:#a3201b">✖ ${a.mal}</span>` : ''} ${ab ? '▲' : '▼'}</span></button>
+        <span class="m" style="display:block">${esc([o.piso ? 'Piso ' + o.piso : '', INST_PS[o.inst] || o.inst, o.semanaTxt].filter(Boolean).join(' · '))} · ${o.tec.length ? '👤 ' + esc(o.tec.join(', ')) : '<b style="color:#a3201b">Sin técnico</b>'}</span>
+        <span style="display:flex;align-items:center;gap:8px;margin-top:6px">${o.empezada ? `<b>${a.hechos} de ${a.tot}</b> equipos` : '<span class="pill p-i">Sin empezar</span>'} <span style="flex:1;height:8px;border-radius:4px;background:#e7ece9;overflow:hidden"><i style="display:block;height:100%;width:${pct}%;background:${a.mal ? '#e9730c' : '#2d8a4e'}"></i></span>${a.mal ? `<span class="pill" style="background:#fde2e1;color:#a3201b">✖ ${a.mal}</span>` : ''} ${ab ? '▲' : '▼'}</span></button>
       ${ab ? `<div style="margin-top:8px;border-top:1px solid var(--line);padding-top:6px">${a.eqs.map(e => `<div style="padding:5px 0;border-bottom:1px solid #eef2f0;font-size:14px">
         ${e.est === 'ok' ? '✔' : e.est === 'mal' ? '<span style="color:#d93025">✖</span>' : e.est === 'sin' ? '🚫' : '⏳'} <b>${esc(e.n)}</b>
         <span class="m"> · ${e.est === 'pend' ? 'pendiente' : esc(e.tec) + (e.ts ? ' · ' + esc(e.ts.slice(8, 10) + '/' + e.ts.slice(5, 7) + ' ' + e.ts.slice(11, 16)) : '')}</span>
-        ${e.mal.map(m => `<div class="m" style="margin-left:18px;color:#a3201b">✖ ${esc(m)}</div>`).join('')}${e.est === 'sin' ? `<div class="m" style="margin-left:18px">Sin acceso${e.obs ? ': ' + esc(e.obs) : ''}</div>` : ''}</div>`).join('')}</div>` : ''}</div>`; }).join('')
-  : '<p class="m">No hay preventivos en curso.</p>'}
+        ${e.mal.map(m => `<div class="m" style="margin-left:18px;color:#a3201b">✖ ${esc(m)}</div>`).join('')}${e.est === 'sin' ? `<div class="m" style="margin-left:18px">Sin acceso${e.obs ? ': ' + esc(e.obs) : ''}</div>` : ''}</div>`).join('')}</div>` : ''}</div>`; };
+  const hechasH = o => o.av && o.av.tot && o.av.hechos === o.av.tot;
+  return cab + `<main>${aviso()}
+  ${eds.length > 1 ? `<div class="seg" style="margin-bottom:10px">${eds.map(e => `<button data-a="ps-ed" data-ed="${e}" aria-pressed="${e === PS.ed}">🏢 ${e}</button>`).join('')}</div>` : ''}
+  <div class="seg" style="margin-bottom:10px"><button data-a="ps-vista" data-v="asig" aria-pressed="${vista === 'asig'}">Asignar (${aAsig.length})</button><button data-a="ps-vista" data-v="seg" aria-pressed="${vista === 'seg'}">Seguimiento (${seg.length})${segA.length ? ' · ' + segA.length + ' atras.' : ''}</button></div>
+  ${insts.length > 1 ? `<label class="f" style="margin-bottom:10px">Instalación<select id="ps-inst"><option value="">Todas</option>${insts.map(i => `<option value="${esc(i)}" ${i === PS.inst ? 'selected' : ''}>${esc(INST_PS[i] || i)}</option>`).join('')}</select></label>` : ''}
+  ${vista === 'asig' ? `
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:4px 0 6px"><h2 style="margin:0">Sin técnico · ${esc((aAsig[0] || L.find(esta) || {}).semanaTxt || 'esta semana')} (${aAsig.length})</h2>${marcarTodas(aAsig, 'sin')}</div>
+  ${aAsig.length ? aAsig.map(o => tarjeta(o, '#d93025')).join('') : '<div class="aviso p-ok">✔ Todas las OT de esta semana tienen técnico.</div>'}
   <div class="card" style="position:sticky;bottom:0;margin-top:14px;box-shadow:0 -4px 14px rgba(0,0,0,.12)">
     <div class="t" style="margin-bottom:6px">Técnico${PS.tecs.length > 1 ? 's' : ''} para las ${nSel} marcada${nSel === 1 ? '' : 's'}</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">${D.plantel.map(t => `<label class="pill" style="font-size:15px;padding:8px 12px;cursor:pointer;${PS.tecs.includes(t.ini) ? 'background:var(--pri);color:#fff' : ''}"><input type="checkbox" data-ps-tec="${esc(t.ini)}" ${PS.tecs.includes(t.ini) ? 'checked' : ''} hidden>${esc(t.ini)}</label>`).join('')}</div>
     ${PS.tecs.length ? `<p class="m" style="margin:0 0 8px">${esc(PS.tecs.map(nombre).join(', '))}</p>` : ''}
     <button class="big" data-a="ps-asignar" style="margin:0" ${puede ? '' : 'disabled'}>${PS.cargando ? '⏳ Guardando…' : !nSel ? 'Marcá las OT' : !PS.tecs.length ? 'Elegí el técnico' : 'Asignar ' + nSel + ' OT'}</button>
-  </div>
+  </div>` : `
+  <h2 style="margin:4px 0 6px">Esta semana (${segH.length})</h2>
+  <p class="m" style="margin:0 0 8px">Lo asignado y cómo se va cumpliendo. Lo terminado sale de la lista. Tocá una OT para ver equipo por equipo.</p>
+  ${segH.length ? segH.map(tarjetaSeg).join('') : '<p class="m">No hay OT asignadas pendientes esta semana.</p>'}
+  ${segA.length ? `<h2 style="margin:16px 0 6px;color:#a3201b">⚠ Atrasadas de semanas anteriores (${segA.length})</h2>${segA.map(tarjetaSeg).join('')}` : '<div class="aviso p-ok" style="margin-top:12px">✔ No hay preventivos atrasados.</div>'}`}
   <p class="o"><button class="btn" data-a="ps-recargar" style="min-height:36px;padding:0 12px" ${E.online ? '' : 'disabled'}>Actualizar</button></p></main>`;
 }
 function vCorrSup(){
@@ -1695,9 +1703,10 @@ document.addEventListener('click', async ev => {
   if (a === 'corr-terminar'){ corrTerminar(); return; }
   if (a === 'ps-abrir'){ E.pantalla = 'prevSup'; E.msg = ''; PS.datos = null; PS.sel = {}; dibujar(); window.scrollTo(0, 0); psCargar(); return; }
   if (a === 'ps-recargar'){ psCargar(); return; }
+  if (a === 'ps-vista'){ PS.vista = t.dataset.v; PS.sel = {}; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'ps-ver'){ PS.abierta = PS.abierta === t.dataset.id ? '' : t.dataset.id; dibujar(); return; }
   if (a === 'ps-ed'){ PS.ed = t.dataset.ed; PS.sel = {}; dibujar(); return; }
-  if (a === 'ps-todas'){ const D = PS.datos; if (!D) return; const L = D.ots.filter(o => o.ed === PS.ed && (!PS.inst || o.inst === PS.inst) && (t.dataset.k === 'sin' ? !o.tec.length : o.tec.length && !o.empezada));
+  if (a === 'ps-todas'){ const D = PS.datos; if (!D) return; const L = D.ots.filter(o => o.ed === PS.ed && (!PS.inst || o.inst === PS.inst) && (t.dataset.k === 'sin' ? !o.tec.length && (!D.semHoy || o.semana === D.semHoy) : o.tec.length && !o.empezada));
     const todas = L.every(o => PS.sel[o.id]); L.forEach(o => { if (todas) delete PS.sel[o.id]; else PS.sel[o.id] = 1; }); dibujar(); return; }
   if (a === 'ps-asignar'){ const ids = Object.keys(PS.sel).filter(id => (PS.datos.ots.find(o => o.id === id) || {}).ed === PS.ed);
     if (!ids.length || !PS.tecs.length) return;
