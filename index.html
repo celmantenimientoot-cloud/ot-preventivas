@@ -1377,12 +1377,13 @@ const nuevoUid = () => E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.
 function avisoExt(){
   const p = n => String(n).padStart(2, '0'), d = new Date(), iso = x => x.getFullYear() + '-' + p(x.getMonth() + 1) + '-' + p(x.getDate()) + 'T' + p(x.getHours()) + ':' + p(x.getMinutes());
   const ahora = iso(d), hoy = ahora.slice(0, 10), man = iso(new Date(Date.now() + 864e5)).slice(0, 10);
-  const L = ((E.cat && E.cat.ext) || []).filter(x => x.fin > ahora && x.ini <= iso(new Date(Date.now() + 864e5)));
+  // Desde el último día hábil anterior (lo calcula el servidor: "desde"); los datos viejos, 24 horas antes (JT, 19/11/2026)
+  const L = ((E.cat && E.cat.ext) || []).filter(x => x.fin > ahora && (x.desde ? x.desde <= ahora : x.ini <= iso(new Date(Date.now() + 864e5))));
   if (!L.length) return '';
-  const dia = t => { const f = t.slice(0, 10); return (f === hoy ? 'hoy' : f === man ? 'mañana' : f.slice(8, 10) + '/' + f.slice(5, 7)) + ' ' + t.slice(11, 16); };
+  const dia = t => { const f = t.slice(0, 10); return (f === hoy ? 'hoy' : f === man ? 'mañana' : ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'][new Date(f + 'T12:00').getDay()] + ' ' + f.slice(8, 10) + '/' + f.slice(5, 7)) + ' ' + t.slice(11, 16); }; // con el día de la semana (se avisa días antes)
   return L.map(x => { const ya = x.ini <= ahora;
     return `<div class="card" style="border-left:8px solid #e9730c;background:#fff8f0;margin-bottom:10px">
-      <div class="t" style="font-size:16px">🌙 Extensión de HVAC · <b>${esc(x.inq)}</b> ${ya ? '<span class="pill" style="background:#e9730c;color:#fff">En curso</span>' : ''}</div>
+      <div class="t" style="font-size:16px">⏰ Extensión de HVAC · <b>${esc(x.inq)}</b> ${ya ? '<span class="pill" style="background:#e9730c;color:#fff">En curso</span>' : ''}</div>
       <div style="margin:4px 0;font-size:15px"><b>${esc(dia(x.ini))}</b> → <b>${esc(dia(x.fin))}</b>${x.uta ? ` · ${esc(x.uta)} UTA` : ''}</div>
       <div class="m">Mantener <b>un chiller encendido</b> en el horario de extensión solicitado.${x.nota ? '<br>' + esc(x.nota) : ''}</div></div>`; }).join('');
 }
