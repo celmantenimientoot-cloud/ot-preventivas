@@ -53,7 +53,7 @@ label.f input,label.f select,label.f textarea{border:1px solid #b4c2bd;border-ra
 .err{background:var(--bad-soft);color:var(--bad-ink)}
 /* OT correctivas (13/11/2026): reloj y barra contra el estimado */
 .reloj{border:1px solid var(--line);border-top:4px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff;display:flex;flex-direction:column;gap:8px}
-.reloj.corre{border-top-color:var(--ok)}.reloj.pausa{border-top-color:var(--warn)}
+#corr-pausa-ok:disabled{opacity:.4;cursor:not-allowed}.reloj.corre{border-top-color:var(--ok)}.reloj.pausa{border-top-color:var(--warn)}
 .rl-t{font-size:42px;font-weight:300;letter-spacing:-.01em;font-variant-numeric:tabular-nums;line-height:1}
 .rl-e{font-size:13px;font-weight:700}.corre .rl-e{color:var(--ok)}.pausa .rl-e{color:var(--warn)}.quieto .rl-e{color:var(--muted)}
 .est{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--muted)}.est .lin{display:flex;justify-content:space-between;gap:8px}
@@ -1340,7 +1340,8 @@ document.addEventListener('keydown', ev => { if (ev.target.id === 'h-q' && ev.ke
 const pisoTxt = p => !p ? '' : /^piso/i.test(String(p).trim()) ? String(p).trim() : 'Piso ' + p;
 const CORR = () => (E.cat && E.cat.corr) || [];
 const corrEnCola = (ot, ev) => (E.cola || []).some(r => r.tipo === 'CORR' && r.ot === ot && (!ev || (r.ev || 'fin') === ev));
-const corrEstado = o => { const e = o.st && o.st.estado;
+const corrPausaCola = ot => { const L = (E.cola || []).filter(r => r.tipo === 'CORR' && r.ot === ot && (r.ev === 'pausa' || r.ev === 'reanuda')); return L.length ? L[L.length - 1] : null; };
+const corrEstado = o => { const q = corrPausaCola(o.ot), e = q ? (q.ev === 'pausa' ? 'pausada' : 'en curso') : o.st && o.st.estado;
   return corrEnCola(o.ot, 'fin') || e === 'terminada' ? 'enviada' : e === 'pausada' ? 'pausa' : e === 'en curso' || E.reloj[o.ot] ? 'corre' : e === 'devuelta' ? 'devuelta' : 'nueva'; };
 const corrDesde = o => { const t = (o.st && o.st.estado === 'en curso' && o.st.t0) || (E.reloj[o.ot] || {}).inicio || ''; return t ? String(t).slice(11, 16) : ''; };
 const critCol = c => ({ A: ['#fde2e1', '#a3201b'], B: ['#fdebd6', '#8f4a00'], C: ['#fbf3c9', '#5c4b00'] }[String(c || '').trim().toUpperCase()] || ['#e6ebe9', '#3a4a45']);
@@ -1397,7 +1398,11 @@ function vCorrOt(){
   : est === 'nueva' || est === 'devuelta' ? `${est === 'devuelta' ? `<div class="aviso err"><b>Devuelta por el supervisor:</b> ${esc(o.st.motivo)}</div>` : ''}
     <button class="big" data-a="corr-empezar" style="background:var(--ok)">▶ Empezar el trabajo</button>
     <p class="m" style="margin:6px 0 0">Tocalo cuando arrancás. Al terminar, cargás qué hiciste y tocás Terminada.</p>`
-  : est === 'pausa' ? `<div class="aviso p-w">⏸ <b>Pausada por el supervisor.</b> Cuando la reanude, seguís.</div>`
+  : est === 'pausa' ? (() => { const q = corrPausaCola(o.ot), mia = q ? q.ev === 'pausa' : String((o.st || {}).pausaPor || '').indexOf('TEC:') === 0, mot = q ? q.motivo : (o.st || {}).pausaMot;
+      return mia ? `<div class="aviso p-w">⏸ <b>Pausada.</b> Motivo: ${esc(mot || '')}</div>
+        <button class="big" data-a="corr-reanudar" style="background:var(--ok)">▶ Reanudar el trabajo</button>
+        <p class="m" style="margin:6px 0 0">Mientras está pausada no se cuenta el tiempo.</p>`
+      : `<div class="aviso p-w">⏸ <b>Pausada por el supervisor.</b> Cuando la reanude, seguís.</div>`; })()
   : `<p style="margin:0"><span class="pill p-ok">En curso</span></p>
     <label class="f">Qué hiciste<textarea id="corr-com" rows="3" maxlength="1000" placeholder="Ej.: se cambió el tubo y se probó el encendido">${esc((E.corrCom || {})[o.ot] || '')}</textarea></label>
     <div style="font-size:14px;color:var(--muted);margin:10px 0 4px">Fotos (opcional, hasta 2): sacalas ahora o elegí de la galería</div>
@@ -1410,6 +1415,10 @@ function vCorrOt(){
         <label class="btn" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px">🎞️ Video de la galería<input id="corr-vid-gal" type="file" accept="video/*" hidden></label></div>
         <p class="m" style="margin:4px 0 0">Opcional. Grabado: hasta ${VID_SEG} s. De la galería: corto, hasta ${VID_GAL_MB} MB.</p>`) : ''}
     <button class="big" data-a="corr-terminar">Terminada</button>
+    ${E.corrPausando === o.ot ? `<div class="card" style="margin-top:12px;border-left:6px solid var(--warn)">
+      <label class="f" style="margin:0">Motivo de la pausa<textarea id="corr-pausa-mot" rows="2" maxlength="300" placeholder="Ej.: falta un repuesto, espero al proveedor">${esc(E.corrPausaMot || '')}</textarea></label>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn" data-a="corr-pausa-no" style="flex:1">Cancelar</button><button class="btn" id="corr-pausa-ok" data-a="corr-pausa-ok" style="flex:1;background:var(--warn);color:#fff;border-color:var(--warn)" ${String(E.corrPausaMot || '').trim() ? '' : 'disabled'}>⏸ Pausar</button></div></div>`
+    : `<button class="btn" data-a="corr-pausar" style="width:100%;margin-top:10px">⏸ Pausar</button>`}
     <p class="m" style="margin:0">Terminada no cierra la OT: va al supervisor para que la revise. Sin señal, se envía sola cuando vuelve.</p>`;
   return barra('OT ' + esc(o.ot), esc(o.ed), '<button data-a="corr-lista">‹ Correctivos</button>') + `<main>${aviso()}
   <div class="card"><div class="t" style="font-size:17px">${esc(o.desc)}</div>
@@ -1423,6 +1432,13 @@ async function corrEmpezar(){
   E.reloj[ot] = { inicio: ts }; await DB.set('reloj', E.reloj);
   await DB.encolar({ uid: nuevoUid(), ts, tipo: 'CORR', ev: 'inicio', ot, tec: E.sesion.id });
   E.cola = await DB.cola(); E.msg = ''; dibujar(); sincronizar();
+}
+// Pausa del técnico (JT, 19/11/2026): con motivo; sin señal queda en la cola con su hora y llega cuando vuelve
+async function corrPausa(ev){
+  const ot = E.corrOt, motivo = String(E.corrPausaMot || '').trim();
+  if (ev === 'pausa' && !motivo){ E.msg = 'Escribí el motivo de la pausa.'; dibujar(); return; }
+  await DB.encolar(Object.assign({ uid: nuevoUid(), ts: ahoraIso(), tipo: 'CORR', ev, ot, tec: E.sesion.id }, ev === 'pausa' ? { motivo: motivo.slice(0, 300) } : {}));
+  E.corrPausando = ''; E.corrPausaMot = ''; E.cola = await DB.cola(); E.msg = ''; dibujar(); toast(ev === 'pausa' ? 'OT ' + ot + ' pausada' : 'OT ' + ot + ' reanudada'); sincronizar();
 }
 async function corrTerminar(){
   const o = CORR().find(x => x.ot === E.corrOt), com = String((E.corrCom || {})[o.ot] || '').trim();
@@ -1593,7 +1609,7 @@ function vCorrSup(){
   <h2 style="margin:16px 0 6px">En curso (${K.length})</h2>
   <p class="m" style="margin:0 0 8px">Si un técnico te avisa que tiene que frenar, la pausás acá; cuando vuelve, la reanudás.</p>
   ${K.length ? K.map(o => `<div class="card"><div class="t"><b>OT ${esc(o.ot)}</b> ${critPill(o.crit)} ${o.st.estado === 'pausada' ? '<span class="pill p-w">Pausada</span>' : '<span class="pill p-ok">En curso</span>'}</div>
-    <div style="margin:4px 0">${esc(o.desc)}</div><div class="m">${esc(o.st.tec)} · ${o.st.corre} min trabajados${o.st.pausas ? ' · ' + o.st.pausas + ' pausa(s)' : ''}</div>
+    <div style="margin:4px 0">${esc(o.desc)}</div><div class="m">${esc(o.st.tec)} · ${o.st.corre} min trabajados${o.st.pausas ? ' · ' + o.st.pausas + ' pausa(s)' : ''}</div>${o.st.estado === 'pausada' && o.st.pausaMot ? `<div class="m" style="color:#a35a00">⏸ Pausada por ${esc(o.st.tec)}: ${esc(o.st.pausaMot)}</div>` : ''}
     <button class="btn" data-a="sup-curso" data-acc="${o.st.estado === 'pausada' ? 'reanudar' : 'pausar'}" data-ot="${esc(o.ot)}" style="width:100%;margin-top:8px" ${E.online ? '' : 'disabled'}>${o.st.estado === 'pausada' ? '▶ Reanudar' : '⏸ Pausar'}</button></div>`).join('')
   : '<p class="m">No hay OT en curso.</p>'}
   ${pieLista()}</main>`;
@@ -1701,6 +1717,10 @@ document.addEventListener('click', async ev => {
   if (a === 'corr-empezar'){ corrEmpezar(); return; }
   if (a === 'sup-curso'){ supAccion(t.dataset.acc, t.dataset.ot); return; }
   if (a === 'corr-terminar'){ corrTerminar(); return; }
+  if (a === 'corr-pausar'){ E.corrPausando = E.corrOt; E.corrPausaMot = ''; dibujar(); setTimeout(() => { const x = document.getElementById('corr-pausa-mot'); if (x){ x.focus(); x.scrollIntoView({ block: 'center' }); } }, 50); return; }
+  if (a === 'corr-pausa-no'){ E.corrPausando = ''; E.corrPausaMot = ''; dibujar(); return; }
+  if (a === 'corr-pausa-ok'){ corrPausa('pausa'); return; }
+  if (a === 'corr-reanudar'){ corrPausa('reanuda'); return; }
   if (a === 'ps-abrir'){ E.pantalla = 'prevSup'; E.msg = ''; PS.datos = null; PS.sel = {}; dibujar(); window.scrollTo(0, 0); psCargar(); return; }
   if (a === 'ps-recargar'){ psCargar(); return; }
   if (a === 'ps-vista'){ PS.vista = t.dataset.v; PS.sel = {}; dibujar(); window.scrollTo(0, 0); return; }
@@ -1827,6 +1847,7 @@ document.addEventListener('input', ev => {
   if (el.dataset.tk){ const r = borrador(E.ot.id).resp; r[el.dataset.tk] = Object.assign(r[el.dataset.tk] || {}, { [el.dataset.f]: el.value }); guardarBorrador(); actualizarProgresoOt(); return; }
   if (el.id === 'ot-obs'){ borrador(E.ot.id).obs = el.value; guardarBorrador(); return; }
   if (el.id === 'corr-com'){ (E.corrCom = E.corrCom || {})[E.corrOt] = el.value; return; }
+  if (el.id === 'corr-pausa-mot'){ E.corrPausaMot = el.value; const b = document.getElementById('corr-pausa-ok'); if (b) b.disabled = !el.value.trim(); return; } // sin motivo, no se puede pausar
   if (el.id === 'eq-obs'){ const b = borrador(E.ot.id); (b.obsEq = b.obsEq || {})[E.ot.parte + '|' + E.ot.eq] = el.value; guardarBorrador(); return; }
   if (el.id === 'ent-motivo'){ E.entMotivo = el.value; const b = document.querySelector('[data-a="entregar-ok"]'); if (b) b.disabled = el.value.trim().length < 3 || !E.online; return; }
   if (el.id === 'c-obs') E.control.obs = el.value;
