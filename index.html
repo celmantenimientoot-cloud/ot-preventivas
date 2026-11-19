@@ -860,7 +860,10 @@ function avanceOt(ot){
 }
 const enCola = id => E.cola.some(r => r.tipo === 'TERMO' && r.otsem === id);
 let borrT;
-function guardarBorrador(){ clearTimeout(borrT); borrT = setTimeout(() => DB.set('borradores', E.borr), 300); }
+// Tiempo de trabajo de los preventivos (JT, 19/11/2026): NO se muestra al técnico. Se suma el tiempo entre marcas de la
+// misma OT (una tarea larga sin marcar también cuenta); un hueco de más de 90 minutos o de un día al otro no se cuenta. Viaja con cada equipo.
+function marcarActividad(){ const c = E.ot; if (!c || !c.id) return; const b = borrador(c.id), ahora = Date.now(); if (b.tUlt && ahora - b.tUlt <= 90 * 60000 && new Date(b.tUlt).toDateString() === new Date(ahora).toDateString()) b.tAct = (b.tAct || 0) + (ahora - b.tUlt); b.tUlt = ahora; }
+function guardarBorrador(){ marcarActividad(); clearTimeout(borrT); borrT = setTimeout(() => DB.set('borradores', E.borr), 300); }
 
 function vVincularTec(){
   return `<div class="bar"><div class="t"><b>OT de mantenimiento</b><small>Técnicos y supervisores</small></div></div><main>
@@ -1202,7 +1205,8 @@ async function guardarEquipo(){
     const k = claveT(c.parte, c.eq, it.id);
     if (it.plano && resp[k]) { try { img[k] = await planoMarcado(it, resp[k]); } catch(x){} }
   }
-  await DB.encolar({ uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: 'TERMO', otsem: o.id, resp, img, obs: String((b.obsEq || {})[c.parte + '|' + c.eq] || '').trim(), obsEq: true, tec: E.sesion.id });
+  marcarActividad(); const act = Math.round((b.tAct || 0) / 6000) / 10; b.tAct = 0; // minutos trabajados desde el equipo anterior (solo para el sistema)
+  await DB.encolar({ uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: 'TERMO', otsem: o.id, resp, img, obs: String((b.obsEq || {})[c.parte + '|' + c.eq] || '').trim(), obsEq: true, tec: E.sesion.id, act });
   Object.keys(resp).forEach(k => { delete b.resp[k]; });
   if (b.obsEq) delete b.obsEq[c.parte + '|' + c.eq];
   await DB.set('borradores', E.borr);
