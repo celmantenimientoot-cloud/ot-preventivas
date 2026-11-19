@@ -106,6 +106,8 @@ button.card{font:inherit;color:inherit}
 .plano-w{overflow:auto;border:1px solid #b4c2bd;border-radius:9px;max-height:68vh;margin-top:6px;background:#fff;-webkit-overflow-scrolling:touch}
 .plano{position:relative}.plano img{width:100%;display:block;user-select:none;-webkit-user-select:none}
 .plano .pt{position:absolute;transform:translate(-50%,-50%);min-width:30px;height:30px;border-radius:15px;border:2px solid #c0392b;background:rgba(255,255,255,.88);font:700 11px system-ui,sans-serif;padding:0 3px;color:#c0392b;line-height:26px}
+.plano .pt{z-index:1}.plano .pt:not(.ok):not(.mal){z-index:3}.plano .pt.pt-flash{z-index:5;animation:ptflash .5s 5 alternate;box-shadow:0 0 0 6px rgba(233,115,12,.55)}@keyframes ptflash{to{transform:translate(-50%,-50%) scale(1.5)}}
+.pt-falta{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.pt-falta button{min-height:34px;padding:0 10px;border:2px solid #c0392b;border-radius:17px;background:#fff;color:#c0392b;font-weight:700}
 .plano .pt.ok{background:#15803d;border-color:#15803d;color:#fff;font-size:15px}.plano .pt.mal{background:#c0392b;color:#fff;font-size:14px}
 .carpeta{text-align:left;width:100%;cursor:pointer;padding:16px}.carpeta .t{font-size:22px}.carpeta .ico{font-size:26px}.carpeta .m{font-size:15px;margin-top:4px}
 .sv-fil{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}.sv-fil label{display:flex;flex-direction:column;font-size:12px;font-weight:700;color:var(--muted);gap:3px}
@@ -125,6 +127,8 @@ body.plano-full .pf-barra{display:flex;position:fixed;top:8px;right:8px;z-index:
 .pf-barra button{min-width:40px;height:36px;border-radius:8px;border:1px solid #b4c2bd;background:#fff;font:700 18px system-ui,sans-serif}
 .pf-barra button.sal{font-size:14px;padding:0 10px;background:var(--pri);color:#fff;border-color:var(--pri)}
 .pf-barra span{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf-barra button.sig{font-size:13px;padding:0 8px;white-space:nowrap;color:#c0392b;border-color:#c0392b}.pf-barra button.sig.ok{color:#15803d;border-color:#15803d}
+@media (max-width:480px){.pf-barra span{display:none}} /* celular vertical: la barra entra entera (−, +, Falta, Salir) */
 /* Celular horizontal: el menú de opciones va de costado (no tapa el plano) y la barra de arriba no queda fija */
 @media (orientation: landscape) and (max-height: 520px){
   .pt-pop{left:auto !important;top:0;bottom:0;width:min(42vw,280px);border-top:0;border-left:2px solid var(--pri);overflow:auto;padding:8px !important}
@@ -1084,17 +1088,32 @@ function ptResumen(it, v){
   return { ok, nMal, faltan: it.plano.pts.length - ok - nMal,
     obs: Object.keys(mal).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1))).map(c => c + ': ' + mal[c].join(', ')).join(' · ') };
 }
+// Los puntos sin marcar, como botones (JT, 19/11/2026: un técnico no encontraba el último aunque hiciera zoom)
+function ptFaltanHtml(it, k, v){
+  const m = (v && v.pts) || {}, vistos = {}, L = [];
+  it.plano.pts.forEach((q, i) => { vistos[q[0]] = (vistos[q[0]] || 0) + 1; if (!m[i]) L.push([i, q[0], vistos[q[0]]]); });
+  if (!L.length) return '';
+  const rep = n => it.plano.pts.filter(q => q[0] === n).length > 1;
+  return `<div class="m" style="margin-top:6px"><b>Sin marcar (${L.length}):</b> tocá uno para ir a ese punto</div><div class="pt-falta">${L.slice(0, 40).map(([i, n, c]) => `<button data-a="pt-ir" data-k="${k}" data-i="${i}">${esc(n)}${rep(n) ? ' · ' + c : ''}</button>`).join('')}${L.length > 40 ? `<span class="m">… y ${L.length - 40} más</span>` : ''}</div>`;
+}
+function ptIr(k, i){
+  const b = document.querySelector(`[data-a="pt"][data-k="${CSS.escape(k)}"][data-i="${i}"]`);
+  if (b){ b.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' }); b.classList.remove('pt-flash'); void b.offsetWidth; b.classList.add('pt-flash'); setTimeout(() => b.classList.remove('pt-flash'), 2600); }
+  setTimeout(() => ptAbrir(k, i), 450);
+}
+const ptSigTxt = (it, v) => { const n = ptResumen(it, v).faltan; return n ? '➜ Falta ' + n : '✔ Listo'; };
 function ptTxtResumen(it, v){ const z = ptResumen(it, v); return `${it.plano.pts.length} ${ptNom(it)} · <b>${z.ok}</b> OK · <b style="color:var(--bad)">${z.nMal}</b> con falla · ${z.faltan} sin marcar`; }
 function vPlano(it, k, v){
   const P = it.plano, zoom = E.planoZoom || 3;
   return `<div class="it2"><div><b>${esc(it.t)}</b>${it.nota ? `<br><span class="m">${esc(it.nota)}</span>` : ''}</div>
     <p class="m" style="margin:4px 0">Tocá cada punto del plano y elegí cómo está. Acercá o alejá con los botones; deslizá para recorrerlo.</p>
     <div class="grid3"><button class="btn" data-a="pt-zoom" data-z="-1">Alejar −</button><button class="btn" data-a="pt-zoom" data-z="1">Acercar +</button><button class="btn" data-a="pt-full">⛶ Pantalla completa</button></div>
-    <div class="pf-barra" id="pf-barra"><button data-a="pt-zoom" data-z="-1" aria-label="Alejar">−</button><button data-a="pt-zoom" data-z="1" aria-label="Acercar">+</button><span id="pf-res">${ptTxtResumen(it, v)}</span><button data-a="pt-full" class="sal">Salir</button></div>
+    <div class="pf-barra" id="pf-barra"><button data-a="pt-zoom" data-z="-1" aria-label="Alejar">−</button><button data-a="pt-zoom" data-z="1" aria-label="Acercar">+</button><span id="pf-res">${ptTxtResumen(it, v)}</span><button data-a="pt-sig" data-k="${k}" id="pf-sig" class="sig${ptResumen(it, v).faltan ? '' : ' ok'}">${ptSigTxt(it, v)}</button><button data-a="pt-full" class="sal">Salir</button></div>
     <div class="plano-w${E.planoFull ? ' full' : ''}" id="plano-w"><div class="plano" style="width:${zoom * 100}%"><img src="${esc(P.img)}" alt="Plano" draggable="false">
       ${P.pts.map((q, i) => { const m = (v.pts || {})[i]; return `<button class="pt ${m === 'ok' ? 'ok' : m ? 'mal' : ''}" data-a="pt" data-k="${k}" data-i="${i}" style="left:${(q[1] / P.w * 100).toFixed(2)}%;top:${(q[2] / P.h * 100).toFixed(2)}%">${m ? ptCods(it)[m][0] : esc(q[0])}</button>`; }).join('')}
     </div></div>
     <p class="m" id="pt-res" style="margin:6px 0">${ptTxtResumen(it, v)}</p>
+    <div id="pt-faltan">${ptFaltanHtml(it, k, v)}</div>
     <button class="btn" data-a="pt-todos" data-k="${k}">Marcar las que faltan como OK ✓</button>
     <p class="m" style="margin:6px 0 0">${Object.values(ptCods(it)).map(c => c.join(' ')).join(' · ')}</p></div>`;
 }
@@ -1110,6 +1129,8 @@ function ptMarcar(k, i, val){
   if (b){ const m = v.pts[i]; b.className = 'pt ' + (m === 'ok' ? 'ok' : m ? 'mal' : ''); b.textContent = m ? ptCods(it)[m][0] : it.plano.pts[i][0]; }
   const res = document.getElementById('pt-res'); if (res) res.innerHTML = ptTxtResumen(it, v);
   const res2 = document.getElementById('pf-res'); if (res2) res2.innerHTML = ptTxtResumen(it, v);
+  const fal = document.getElementById('pt-faltan'); if (fal) fal.innerHTML = ptFaltanHtml(it, k, v);
+  const sig = document.getElementById('pf-sig'); if (sig){ sig.textContent = ptSigTxt(it, v); sig.classList.toggle('ok', !ptResumen(it, v).faltan); }
   actualizarProgresoOt();
 }
 function ptAbrir(k, i){
@@ -1121,6 +1142,11 @@ function ptAbrir(k, i){
     <div class="ops">${Object.keys(C).map(c => `<button data-a="pt-set" data-k="${k}" data-i="${i}" data-v="${c}" style="${c === 'ok' ? 'color:#15803d' : 'color:#c0392b'}">${C[c][0]} ${C[c][1]}</button>`).join('')}
     <button data-a="pt-set" data-k="${k}" data-i="${i}" data-v="x">Borrar la marca</button><button data-a="pt-cerrar">Cancelar</button></div>`;
   document.body.appendChild(d);
+  // Que el menú no tape el punto (JT, 19/11/2026): en vertical va arriba; en horizontal, al otro costado
+  requestAnimationFrame(() => { const b = document.querySelector(`[data-a="pt"][data-k="${CSS.escape(k)}"][data-i="${i}"]`); if (!b || !d.isConnected) return;
+    const r = b.getBoundingClientRect(), p = d.getBoundingClientRect(); if (!(r.right > p.left && r.left < p.right && r.bottom > p.top && r.top < p.bottom)) return;
+    if (p.width < innerWidth - 4){ d.style.setProperty('left', '0', 'important'); d.style.setProperty('right', 'auto', 'important'); d.style.borderLeft = '0'; d.style.borderRight = '2px solid var(--pri)'; }
+    else { d.style.top = (document.body.classList.contains('plano-full') ? 56 : 0) + 'px'; d.style.bottom = 'auto'; d.style.borderTop = '0'; d.style.borderBottom = '2px solid var(--pri)'; d.style.boxShadow = '0 8px 24px rgba(0,0,0,.2)'; } });
 }
 // Medición con tope (ej. tableros: no más de 50 °C): si lo supera, la tarea queda con ✖ y la observación escrita
 function topeMed(k, val){
@@ -1747,6 +1773,8 @@ document.addEventListener('click', async ev => {
     E.msg = ''; guardarBorrador(); dibujar(); return;
   }
   if (a === 'pt'){ ptAbrir(t.dataset.k, +t.dataset.i); return; }
+  if (a === 'pt-ir'){ ptIr(t.dataset.k, +t.dataset.i); return; }
+  if (a === 'pt-sig'){ const it = ptTarea(t.dataset.k), v = borrador(E.ot.id).resp[t.dataset.k] || {}, i = it.plano.pts.findIndex((q, j) => !(v.pts || {})[j]); if (i < 0){ toast('Ya están todos marcados'); return; } ptIr(t.dataset.k, i); return; }
   if (a === 'pt-set'){ ptMarcar(t.dataset.k, +t.dataset.i, t.dataset.v); cerrarPt(); return; }
   if (a === 'pt-cerrar'){ cerrarPt(); return; }
   if (a === 'pt-full'){ // plano a pantalla completa (sobre todo con el celular horizontal); sin redibujar, para no perder el lugar
@@ -1756,7 +1784,8 @@ document.addEventListener('click', async ev => {
   if (a === 'pt-todos'){ const it = ptTarea(t.dataset.k), v = borrador(E.ot.id).resp[t.dataset.k] || {}; it.plano.pts.forEach((q, i) => { if (!(v.pts || {})[i]) ptMarcar(t.dataset.k, i, 'ok'); }); return; }
   if (a === 'pt-zoom'){ // cambia el zoom manteniendo la zona que se estaba mirando
     const w = document.getElementById('plano-w'), fx = w ? (w.scrollLeft + w.clientWidth / 2) / w.scrollWidth : .5, fy = w ? (w.scrollTop + w.clientHeight / 2) / w.scrollHeight : .5;
-    E.planoZoom = Math.max(1, Math.min(6, (E.planoZoom || 3) + Number(t.dataset.z))); dibujar();
+    const ZS = [1, 2, 3, 4, 6, 8, 10, 12], zi = ZS.reduce((b, z, j) => Math.abs(z - (E.planoZoom || 3)) < Math.abs(ZS[b] - (E.planoZoom || 3)) ? j : b, 0); // hasta 12 (JT, 19/11/2026)
+    E.planoZoom = ZS[Math.max(0, Math.min(ZS.length - 1, zi + Number(t.dataset.z)))]; dibujar();
     const n = document.getElementById('plano-w'); if (n){ n.scrollLeft = fx * n.scrollWidth - n.clientWidth / 2; n.scrollTop = fy * n.scrollHeight - n.clientHeight / 2; }
     return; }
   if (a === 'todo-ok'){
