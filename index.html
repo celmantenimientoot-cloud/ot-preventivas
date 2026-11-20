@@ -583,6 +583,8 @@ async function guardarControl(){
    Extinred se lleva la manga a la prueba hidráulica y deja una sustituta: el nicho queda SUSTITUTA.
    Cuando vuelve, la manga trae un código nuevo y su vencimiento (mes y año: vale hasta el último día del mes). */
 const esSust = e => esNicho(e) && e.manga === 'sustituta';
+// Bocas de inspección municipal (JT, 20/11/2026: PBh19, PBh20 y PBh21 de CEL): no llevan manga, solo el control OK / X
+const sinManga = e => esNicho(e) && /BOCA DE INSPECC/.test(String(e.ident || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase());
 function mangaLocal(eq, m, ts){
   if (m.accion === 'retiro'){ if (eq.manga !== 'sustituta') Object.assign(eq, { mangaRet: eq.ident, ident: '', vtoManga: '', manga: 'sustituta', mangaFec: String(ts || ahoraIso()).slice(0, 10) }); }
   else if (m.accion === 'vuelve'){
@@ -609,7 +611,7 @@ async function guardarManga(){
 // Cada nicho va a la cola como si se hiciera uno por uno (funciona sin señal); quedan SUSTITUTA.
 const pisoN = p => { const t = String(p || '').toUpperCase(), m = t.match(/\d+/); return /SS/.test(t) ? -(m ? +m[0] : 0) : /^(PB|PLANTA)/.test(t) ? 0 : m ? +m[0] : 99; };
 function vMgLote(){
-  const N = equiposDe('HID').concat(equiposDe('HIN')), pisos = [...new Set(N.map(e => String(e.piso || '–')))].sort((a, b) => pisoN(b) - pisoN(a));
+  const N = equiposDe('HID').concat(equiposDe('HIN')).filter(e => !sinManga(e)), pisos = [...new Set(N.map(e => String(e.piso || '–')))].sort((a, b) => pisoN(b) - pisoN(a));
   const sel = E.mgSel || (E.mgSel = new Set()), no = E.mgNo || (E.mgNo = new Set());
   const L = N.filter(e => sel.has(String(e.piso || '–'))).sort((a, b) => pisoN(b.piso) - pisoN(a.piso) || String(a.pos).localeCompare(String(b.pos), 'es', { numeric: true }));
   const van = L.filter(e => !esSust(e) && !no.has(e.pos)), ya = L.filter(esSust).length;
@@ -623,7 +625,7 @@ function vMgLote(){
   : '<p class="o">Tocá los pisos de la visita para ver sus mangas.</p>'}</main>`;
 }
 async function mgLoteOk(){
-  const N = equiposDe('HID').concat(equiposDe('HIN')), sel = E.mgSel || new Set(), no = E.mgNo || new Set();
+  const N = equiposDe('HID').concat(equiposDe('HIN')).filter(e => !sinManga(e)), sel = E.mgSel || new Set(), no = E.mgNo || new Set();
   const van = N.filter(e => sel.has(String(e.piso || '–')) && !esSust(e) && !no.has(e.pos));
   if (!van.length) return;
   if (!confirm('¿Extinred se lleva ' + van.length + ' manga' + (van.length === 1 ? '' : 's') + '? Esos nichos quedan con manga SUSTITUTA hasta que vuelvan.')) return;
@@ -772,6 +774,7 @@ function fichaEquipo(e){
        ['Vencimiento de extintor', vtoCelda(e.vtoExt)], ['Vencimiento de carga', vtoCelda(e.vtoCarga)], ['Vencimiento de prueba hidráulica', vtoCelda(e.vtoPH)]]
     : esSust(e) ? [['Posición', `<span class="mono">${esc(e.pos)}</span>`], ['Piso', esc(e.piso)], ['Ubicación', esc(e.ubic)], ['Código de manga', '<b>SUSTITUTA</b> <span class="pill p-w">en Extinred</span>'],
        ['Se llevaron', `<b>${esc(e.mangaRet || '–')}</b>${e.mangaFec ? ' el ' + fmtD(e.mangaFec) : ''}`]]
+    : sinManga(e) ? [['Posición', `<span class="mono">${esc(e.pos)}</span>`], ['Piso', esc(e.piso)], ['Ubicación', esc(e.ubic)], ['Tipo', '<b>Boca de inspección municipal</b> <span class="pill p-i">Sin manga</span>']]
     : [['Posición', `<span class="mono">${esc(e.pos)}</span>`], ['Piso', esc(e.piso)], ['Ubicación', esc(e.ubic)], ['Código de manga', `<b>${esc(e.ident || '–')}</b>`],
        ['Vencimiento de manga', vtoCelda(e.vtoManga)]];
   return `<div class="ficha"><table class="fi">${filas.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('')}</table></div>`;
@@ -814,7 +817,7 @@ function vControl(){
   return cabeza + `<main>
   ${ya ? `<div class="aviso p-i">Ya se controló esta quincena (${fmtD(ya)} ${ya.slice(11, 16)}). Si lo guardás de nuevo, queda el último.</div>` : ''}
   ${fichaEquipo(e)}
-  ${faltanDatos && !cm && !esSust(e) ? `<div class="aviso p-w">A este ${EXT ? 'extintor' : 'nicho'} le faltan datos (${EXT ? 'ID o vencimientos' : 'código o vencimiento de la manga'}). Completalos con la etiqueta.</div><button class="big" data-a="cambio" data-r="0">COMPLETAR DATOS</button>` : ''}
+  ${faltanDatos && !cm && !esSust(e) && !sinManga(e) ? `<div class="aviso p-w">A este ${EXT ? 'extintor' : 'nicho'} le faltan datos (${EXT ? 'ID o vencimientos' : 'código o vencimiento de la manga'}). Completalos con la etiqueta.</div><button class="big" data-a="cambio" data-r="0">COMPLETAR DATOS</button>` : ''}
   ${vencido && !cm ? `<button class="big" data-a="cambio" data-r="1" data-motivo="${esc(vencido[2])}" style="background:var(--bad)">Reemplazar ahora (${esc(vencido[2].toLowerCase())})</button>` : ''}
   ${cm ? `<div class="card"><div class="t">${c.reemplazo ? (EXT ? 'Reemplazo con un extintor del depósito de reserva' : 'Cambio de manga') : 'Corregir los datos del ' + (EXT ? 'extintor' : 'nicho')}</div>
       ${c.reemplazo ? `<div class="m">Sale: ${EXT ? 'ID ' + esc(e.ident || '–') + ' ' + esc([e.clase, e.peso].filter(Boolean).join(' ')) : 'manga ' + esc(e.ident || '–')}.${EXT && !esDep(e) && depT_() ? ' Se guarda en el depósito, A RECARGAR.' : ''} Queda una línea para el supervisor${EXT ? ' (sugerido: DENAPOLI)' : ''}.</div>
@@ -829,6 +832,7 @@ function vControl(){
       <button class="btn" data-a="cambio-no" style="margin-top:8px">Cancelar el cambio</button></div>`
     : esSust(e) ? `<button class="big" data-a="manga" data-v="vuelve">VOLVIÓ LA MANGA: CARGAR CÓDIGO NUEVO</button>
       <button class="btn" data-a="vacio">No hay equipo en esta posición</button>`
+    : sinManga(e) ? `<button class="btn" data-a="cambio" data-r="0">Corregir datos</button>`
     : `${EXT ? '' : '<button class="btn" data-a="manga" data-v="retiro">Extinred se lleva la manga (queda sustituta)</button>'}
       <div class="grid2"><button class="btn" data-a="cambio" data-r="1">${EXT ? 'Reemplazar extintor' : 'Cambiar manga'}</button><button class="btn" data-a="cambio" data-r="0">Corregir datos</button></div>
       <button class="btn" data-a="vacio">No hay equipo en esta posición</button>`}
