@@ -605,6 +605,36 @@ async function guardarManga(){
   E.control = null; E.pantalla = 'escanear'; E.msg = '';
   dibujar(); sincronizar();
 }
+// Cambio de mangas por piso (JT, 20/11/2026): el bombero elige los pisos y marca de una vez las que se lleva Extinred.
+// Cada nicho va a la cola como si se hiciera uno por uno (funciona sin señal); quedan SUSTITUTA.
+const pisoN = p => { const t = String(p || '').toUpperCase(), m = t.match(/\d+/); return /SS/.test(t) ? -(m ? +m[0] : 0) : /^(PB|PLANTA)/.test(t) ? 0 : m ? +m[0] : 99; };
+function vMgLote(){
+  const N = equiposDe('HID').concat(equiposDe('HIN')), pisos = [...new Set(N.map(e => String(e.piso || '–')))].sort((a, b) => pisoN(b) - pisoN(a));
+  const sel = E.mgSel || (E.mgSel = new Set()), no = E.mgNo || (E.mgNo = new Set());
+  const L = N.filter(e => sel.has(String(e.piso || '–'))).sort((a, b) => pisoN(b.piso) - pisoN(a.piso) || String(a.pos).localeCompare(String(b.pos), 'es', { numeric: true }));
+  const van = L.filter(e => !esSust(e) && !no.has(e.pos)), ya = L.filter(esSust).length;
+  return barra('Cambio de mangas', 'Extinred · elegí los pisos', '<button data-a="inicio">Volver</button>') + `<main>${aviso()}
+  <div class="card"><div class="t">1 · Pisos de la visita</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${pisos.map(p => `<button class="btn" data-a="mg-piso" data-p="${esc(p)}" style="min-height:40px;padding:0 12px;${sel.has(p) ? 'background:var(--pri);color:#fff;border-color:var(--pri)' : ''}">${esc(p)}</button>`).join('')}</div></div>
+  ${L.length ? `<div class="card"><div class="t">2 · Mangas que se lleva Extinred (${van.length})</div><div class="m" style="margin-bottom:6px">Destildá la que no se lleven.${ya ? ' ' + ya + (ya === 1 ? ' ya está' : ' ya están') + ' en Extinred (sustituta).' : ''}</div>
+    ${L.map(e => esSust(e) ? `<div style="padding:8px 0;border-bottom:1px solid var(--line);opacity:.6"><span class="mono">${esc(e.pos)}</span> · <span class="pill p-w">Sustituta</span> <span class="m">ya en Extinred</span></div>`
+      : `<label style="display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:15px"><input type="checkbox" data-mgno="${esc(e.pos)}" ${no.has(e.pos) ? '' : 'checked'} style="width:22px;height:22px">
+        <span style="flex:1"><b class="mono">${esc(e.pos)}</b> · Piso ${esc(e.piso)}${e.ubic ? ' · ' + esc(e.ubic) : ''}</span><b class="mono">${esc(e.ident || '–')}</b></label>`).join('')}</div>
+    <button class="big" data-a="mg-lote-ok" ${van.length ? '' : 'disabled'}>${van.length ? 'EXTINRED SE LLEVA ' + van.length + ' MANGA' + (van.length === 1 ? '' : 'S') + ' · QUEDAN SUSTITUTA' : 'Elegí al menos una manga'}</button>`
+  : '<p class="o">Tocá los pisos de la visita para ver sus mangas.</p>'}</main>`;
+}
+async function mgLoteOk(){
+  const N = equiposDe('HID').concat(equiposDe('HIN')), sel = E.mgSel || new Set(), no = E.mgNo || new Set();
+  const van = N.filter(e => sel.has(String(e.piso || '–')) && !esSust(e) && !no.has(e.pos));
+  if (!van.length) return;
+  if (!confirm('¿Extinred se lleva ' + van.length + ' manga' + (van.length === 1 ? '' : 's') + '? Esos nichos quedan con manga SUSTITUTA hasta que vuelvan.')) return;
+  for (const e of van){
+    const r = { uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: e.tipo || 'HID', pos: e.pos, bombero: E.sesion.id, resp: {}, manga: { accion: 'retiro', ident: '', vto: '' } };
+    await DB.encolar(r); mangaLocal(e, r.manga, r.ts);
+  }
+  await DB.set('catalogo', E.cat); E.cola = await DB.cola();
+  toast('Listo: ' + van.length + ' nicho' + (van.length === 1 ? '' : 's') + ' con manga SUSTITUTA');
+  E.mgSel = new Set(); E.mgNo = new Set(); E.pantalla = 'inicio'; E.msg = ''; dibujar(); sincronizar();
+}
 function vManga(){
   const c = E.control, e = c.eq, m = c.manga;
   return barra('Nicho ' + e.pos, esc(e.piso) + ' · ' + esc(e.ubic), '<button data-a="cancelar">Cancelar</button>') + `<main>
@@ -688,6 +718,7 @@ function vInicio(){
   return barra('Hola, ' + E.sesion.nombre, esc(E.tablet.nombre) + ' · ' + esc(E.tablet.ed), '<button data-a="salir">Salir</button>') + `<main>
   ${aviso()}
   ${nSust ? `<button class="card" data-a="ver-sust" style="display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;border-color:var(--warn);background:var(--warn-soft);cursor:pointer"><span><b>${nSust} ${nSust === 1 ? 'nicho' : 'nichos'} con manga SUSTITUTA</b><br><span class="m">Esperan la manga de Extinred · tocá para ver</span></span><span>›</span></button>` : ''}
+  ${equiposDe('HID').length + equiposDe('HIN').length ? `<button class="card" data-a="mg-lote" style="display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;cursor:pointer"><span><b>🔁 Cambio de mangas (Extinred)</b><br><span class="m">Elegí los pisos y marcá de una vez las que se llevan</span></span><span style="font-size:20px">›</span></button>` : ''}
   ${tarjetas || '<div class="aviso err">Esta tablet todavía no tiene equipos. Tocá "Actualizar" con señal.</div>'}
   ${resDep}
   <p class="o">Datos del ${E.cat.bajado ? fmtD(E.cat.bajado) + ' ' + E.cat.bajado.slice(11, 16) : '–'} · se actualizan solos con señal</p>
@@ -1694,7 +1725,7 @@ async function supAccion(accion, ot){
 function dibujar(){
   const app = document.getElementById('app'), antes = E.pantallaDibujada;
   if (E.qr && E.pantalla === 'inicio' && E.sesion){ if (esTec()){ E.pantalla = 'historial'; setTimeout(cargarHistorial, 0); } else { E.qr = null; E.msg = 'Ese QR es para la app de los técnicos (celular).'; } }
-  const v = { vincular: vVincular, 'vincular-tec': vVincularTec, login: vLogin, inicio: vInicio, superv: vSuperv, corr: vCorr, corrOt: vCorrOt, corrSup: vCorrSup, prevSup: vPrevSup, corrSupOt: vCorrSupOt, historial: vHistorial, hbuscar: vHBuscar, entregar: vEntregar, escanear: vEscanear, buscar: vBuscar, control: vControl, ot: vOt }[E.pantalla];
+  const v = { vincular: vVincular, 'vincular-tec': vVincularTec, login: vLogin, inicio: vInicio, superv: vSuperv, corr: vCorr, corrOt: vCorrOt, corrSup: vCorrSup, prevSup: vPrevSup, corrSupOt: vCorrSupOt, historial: vHistorial, hbuscar: vHBuscar, entregar: vEntregar, escanear: vEscanear, buscar: vBuscar, mgLote: vMgLote, control: vControl, ot: vOt }[E.pantalla];
   if (!v){ app.innerHTML = '<main><p class="o">Cargando…</p></main>'; return; }
   // No redibujar mientras se escribe en un campo de texto (se perdería el foco)
   const foco = document.activeElement && document.activeElement.id;
@@ -1849,6 +1880,9 @@ document.addEventListener('click', async ev => {
   if (a === 'sv-vttipo'){ E.sv.vtTipo = t.dataset.t; dibujar(); return; }
   if (a === 'sv-abrir'){ E.sv.abierto = E.sv.abierto === t.dataset.u ? '' : t.dataset.u; dibujar(); return; }
   if (a === 'sup-fil'){ E.supFil = t.dataset.f; dibujar(); return; }
+  if (a === 'mg-lote'){ E.pantalla = 'mgLote'; E.mgSel = new Set(); E.mgNo = new Set(); E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
+  if (a === 'mg-piso'){ const p = t.dataset.p; E.mgSel.has(p) ? E.mgSel.delete(p) : E.mgSel.add(p); dibujar(); return; }
+  if (a === 'mg-lote-ok'){ mgLoteOk(); return; }
   if (a === 'ver-sust'){ E.pantalla = 'buscar'; E.tipo = equiposDe('HID').some(esSust) ? 'HID' : 'HIN'; E.q = ''; E.soloSust = true; E.msg = ''; dibujar(); return; }
   if (a === 'solo-sust'){ E.soloSust = !E.soloSust; dibujar(); return; }
   if (a === 'b-est'){ E.bEst = t.dataset.v; dibujar(); return; }
@@ -1895,6 +1929,7 @@ document.addEventListener('change', ev => {
   const el = ev.target;
   if (el.dataset.tk && el.dataset.f === 'val') topeMed(el.dataset.tk, el.value);
   if (el.id === 'b-piso'){ E.bPiso = el.value; dibujar(); return; }
+  if (el.dataset.mgno){ const k = el.dataset.mgno; el.checked ? E.mgNo.delete(k) : E.mgNo.add(k); dibujar(); return; }
   // Técnico: ordenar y filtrar sus OT (por piso, por tipo o por rutina anual / semestral / especial)
   const kf = { 'tec-orden': 'orden', 'tec-tipo': 'fTipo', 'tec-piso': 'fPiso', 'tec-rut': 'fRut' }[el.id];
   if (kf){ E[kf] = el.value; dibujar(); return; }
