@@ -1662,20 +1662,24 @@ function vPrevSup(){
 }
 function vCorrSup(){
   const C0 = E.cat.corrCerrar || [], K0 = E.cat.corrCurso || [], tecs = [...new Set(C0.concat(K0).map(o => o.st.tec).filter(Boolean))].sort();
+  const eds = ['CEL', 'CEN', 'EC']; // filtro por edificio, siempre los 4 botones (JT, 20/11/2026)
   if (E.supTec && !tecs.includes(E.supTec)) E.supTec = '';
-  const C = C0.filter(o => !E.supTec || o.st.tec === E.supTec), K = K0.filter(o => !E.supTec || o.st.tec === E.supTec);
+  if (E.supEd && !eds.includes(E.supEd)) E.supEd = '';
+  const va = o => (!E.supTec || o.st.tec === E.supTec) && (!E.supEd || o.ed === E.supEd);
+  const C = C0.filter(va), K = K0.filter(va);
   const dif = o => o.est ? o.st.min - o.est : 0;
   return barra('✔ Supervisor', 'Correctivos · ' + esc(E.sesion.nombre), '<button data-a="corr-volver">‹ Carpetas</button>') + `<main>${aviso()}
+  <div class="seg" style="margin-bottom:10px">${[['', 'Todos']].concat(eds.map(x => [x, x])).map(([v, n]) => `<button data-a="sup-ed" data-e="${esc(v)}" aria-pressed="${v === (E.supEd || '')}">${esc(n)}</button>`).join('')}</div>
   ${tecs.length > 1 ? `<label class="f" style="margin-bottom:10px">Técnico<select id="sup-tec"><option value="">Todos</option>${tecs.map(x => `<option ${x === E.supTec ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>` : ''}
   <h2 style="margin:4px 0 6px">Para cerrar (${C.length})</h2>
   ${C.length ? C.map(o => `<button class="card" data-a="sup-ot" data-ot="${esc(o.ot)}" style="text-align:left;width:100%;cursor:pointer">
     <div class="t"><b>OT ${esc(o.ot)}</b> ${critPill(o.crit)} ${o.st.foto ? `<span class="pill p-i">${o.st.foto2 ? '2 fotos' : 'Con foto'}</span>` : ''}</div><div style="margin:4px 0">${esc(o.desc)}</div>
-    <div class="m">${esc(o.st.tec)} · <b>${o.st.min} min</b>${o.est ? ` · estimado ${o.est} min ${dif(o) > 0 ? `<span class="pill p-w">+${dif(o)} min</span>` : '<span class="pill p-ok">dentro</span>'}` : ''}</div></button>`).join('')
+    <div class="m">${o.ed ? esc(o.ed) + ' · ' : ''}${esc(o.st.tec)} · <b>${o.st.min} min</b>${o.est ? ` · estimado ${o.est} min ${dif(o) > 0 ? `<span class="pill p-w">+${dif(o)} min</span>` : '<span class="pill p-ok">dentro</span>'}` : ''}</div></button>`).join('')
   : '<div class="aviso p-ok">✔ No hay OT para cerrar.</div>'}
   <h2 style="margin:16px 0 6px">En curso (${K.length})</h2>
   <p class="m" style="margin:0 0 8px">Si un técnico te avisa que tiene que frenar, la pausás acá; cuando vuelve, la reanudás.</p>
   ${K.length ? K.map(o => `<div class="card"><div class="t"><b>OT ${esc(o.ot)}</b> ${critPill(o.crit)} ${o.st.estado === 'pausada' ? '<span class="pill p-w">Pausada</span>' : '<span class="pill p-ok">En curso</span>'}</div>
-    <div style="margin:4px 0">${esc(o.desc)}</div><div class="m">${esc(o.st.tec)} · ${o.st.corre} min trabajados${o.st.pausas ? ' · ' + o.st.pausas + ' pausa(s)' : ''}</div>${o.st.estado === 'pausada' && o.st.pausaMot ? `<div class="m" style="color:#a35a00">⏸ Pausada por ${esc(o.st.tec)}: ${esc(o.st.pausaMot)}</div>` : ''}
+    <div style="margin:4px 0">${esc(o.desc)}</div><div class="m">${o.ed ? esc(o.ed) + ' · ' : ''}${esc(o.st.tec)} · ${o.st.corre} min trabajados${o.st.pausas ? ' · ' + o.st.pausas + ' pausa(s)' : ''}</div>${o.st.estado === 'pausada' && o.st.pausaMot ? `<div class="m" style="color:#a35a00">⏸ Pausada por ${esc(o.st.tec)}: ${esc(o.st.pausaMot)}</div>` : ''}
     <button class="btn" data-a="sup-curso" data-acc="${o.st.estado === 'pausada' ? 'reanudar' : 'pausar'}" data-ot="${esc(o.ot)}" style="width:100%;margin-top:8px" ${E.online ? '' : 'disabled'}>${o.st.estado === 'pausada' ? '▶ Reanudar' : '⏸ Pausar'}</button></div>`).join('')
   : '<p class="m">No hay OT en curso.</p>'}
   ${pieLista()}</main>`;
@@ -1799,6 +1803,7 @@ document.addEventListener('click', async ev => {
     const muchas = ids.length >= 10 ? '\n\n⚠ Son MUCHAS OT (' + ids.length + '). Revisá que sea el edificio y la semana correctos.' : '';
     if (!confirm('¿Asignar ' + ids.length + ' OT de ' + PS.ed + ' a ' + PS.tecs.join(', ') + '?' + muchas)) return;
     psCargar({ accion: 'asignar', ids, tecs: PS.tecs }); return; }
+  if (a === 'sup-ed'){ E.supEd = t.dataset.e || ''; dibujar(); return; } // botones de edificio (JT, 20/11/2026)
   if (a === 'sup-lista'){ E.pantalla = 'corrSup'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'sup-ot'){ E.supOt = t.dataset.ot; E.pantalla = 'corrSupOt'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'sup-cerrar' || a === 'sup-relevante' || a === 'sup-devolver'){ supAccion(a.slice(4) === 'cerrar' ? 'cerrar' : a.slice(4)); return; }
