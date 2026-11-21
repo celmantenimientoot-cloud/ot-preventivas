@@ -1420,11 +1420,15 @@ function avisoExt(){
   const L = ((E.cat && E.cat.ext) || []).filter(x => x.fin > ahora && (x.desde ? x.desde <= ahora : x.ini <= iso(new Date(Date.now() + 864e5))));
   if (!L.length) return '';
   const dia = t => { const f = t.slice(0, 10); return (f === hoy ? 'hoy' : f === man ? 'mañana' : ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'][new Date(f + 'T12:00').getDay()] + ' ' + f.slice(8, 10) + '/' + f.slice(5, 7)) + ' ' + t.slice(11, 16); }; // con el día de la semana (se avisa días antes)
-  return L.map(x => { const ya = x.ini <= ahora;
-    return `<div class="card" style="border-left:8px solid #e9730c;background:#fff8f0;margin-bottom:10px">
+  // Sección desplegable (JT, 20/11/2026): cerrada muestra cuántas hay y si alguna está en curso; se abre tocándola
+  const enCurso = L.filter(x => x.ini <= ahora).length, ab = !!E.extAbierto;
+  return `<button class="card" data-a="ext-tog" aria-expanded="${ab}" style="display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;cursor:pointer;border-left:8px solid #e9730c;background:#fff8f0;margin-bottom:${ab ? 6 : 10}px">
+    <span class="t" style="font-size:16px">⏰🌬️ Extensiones de HVAC (${L.length}) ${enCurso ? `<span class="pill" style="background:#e9730c;color:#fff">${enCurso} en curso</span>` : ''}</span>
+    <span style="font-size:20px">${ab ? '▲' : '▼'}</span></button>` + (ab ? L.map(x => { const ya = x.ini <= ahora;
+    return `<div class="card" style="border-left:8px solid #e9730c;background:#fff8f0;margin:0 0 10px 12px">
       <div class="t" style="font-size:16px">⏰🌬️ Extensión de HVAC · <b>${esc(x.inq)}</b> ${ya ? '<span class="pill" style="background:#e9730c;color:#fff">En curso</span>' : ''}</div>
       <div style="margin:4px 0;font-size:15px"><b>${esc(dia(x.ini))}</b> → <b>${esc(dia(x.fin))}</b>${x.uta ? ` · ${esc(x.uta)} UTA` : ''}</div>
-      <div class="m">Mantener <b>un chiller encendido</b> en el horario de extensión solicitado.${x.nota ? '<br>' + esc(x.nota) : ''}</div></div>`; }).join('');
+      <div class="m">Mantener <b>un chiller encendido</b> en el horario de extensión solicitado.${x.nota ? '<br>' + esc(x.nota) : ''}</div></div>`; }).join('') : '');
 }
 function corrCarpetas(){
   const L = CORR(), pend = L.filter(o => corrEstado(o) !== 'enviada'), nuevas = pend.filter(o => !E.vistas[o.ot]).length, C = E.cat.corrCerrar, K = E.cat.corrCurso || [];
@@ -1803,6 +1807,7 @@ document.addEventListener('click', async ev => {
     const muchas = ids.length >= 10 ? '\n\n⚠ Son MUCHAS OT (' + ids.length + '). Revisá que sea el edificio y la semana correctos.' : '';
     if (!confirm('¿Asignar ' + ids.length + ' OT de ' + PS.ed + ' a ' + PS.tecs.join(', ') + '?' + muchas)) return;
     psCargar({ accion: 'asignar', ids, tecs: PS.tecs }); return; }
+  if (a === 'ext-tog'){ E.extAbierto = !E.extAbierto; dibujar(); return; }
   if (a === 'sup-ed'){ E.supEd = t.dataset.e || ''; dibujar(); return; } // botones de edificio (JT, 20/11/2026)
   if (a === 'sup-lista'){ E.pantalla = 'corrSup'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'sup-ot'){ E.supOt = t.dataset.ot; E.pantalla = 'corrSupOt'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
