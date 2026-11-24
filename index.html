@@ -1975,7 +1975,8 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 setInterval(() => { if (navigator.onLine && E.cola.length) sincronizar(); }, 60000);
 // Técnico en "Mis OT" con la app abierta (11/11/2026): la lista se baja sola cada 5 minutos. Antes solo al entrar o al
 // volver a la app, y una OT asignada mientras tanto (o de otra instalación: las carpetas) no aparecía hasta salir y entrar
-setInterval(() => { if (esTec() && E.sesion && E.pantalla === 'inicio' && document.visibilityState === 'visible') actualizarSola(); }, 5 * 60000);
+// Sin MTO (24/11/2026): las OT asignadas en el sistema están al instante en el servidor; el celular las pide cada 1 minuto (antes 5)
+setInterval(() => { if (esTec() && E.sesion && E.pantalla === 'inicio' && document.visibilityState === 'visible') actualizarSola(); }, 60000);
 // Cada 2 minutos; si la tablet todavía no tiene bomberos, cada 20 segundos
 setInterval(() => { if (E.pantalla === 'login' && !(E.cat && E.cat.bomberos || []).length) actualizarSola(); }, 20000);
 setInterval(actualizarSola, 120000);
