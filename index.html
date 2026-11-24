@@ -1512,7 +1512,7 @@ function vCorrOt(){
     ${fotos.length ? `<div style="display:flex;gap:8px;margin-bottom:8px">${fotos.map((f, i) => `<div style="position:relative;flex:1;max-width:48%"><img src="${f}" alt="Foto ${i + 1}" style="width:100%;max-height:160px;object-fit:cover;border-radius:9px;border:1px solid var(--line)">
       <button class="btn" data-a="corr-foto-quitar" data-i="${i}" style="position:absolute;top:4px;right:4px;min-height:32px;padding:0 10px;background:rgba(255,255,255,.92)">✕</button></div>`).join('')}</div>` : ''}
     ${fotos.length < 2 ? `<div style="display:flex;gap:8px"><label class="btn" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px">📷 ${fotos.length ? 'Sacar otra' : 'Sacar foto'}<input id="corr-foto" type="file" accept="image/*" capture="environment" hidden></label>
-      <label class="btn" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px">🖼️ De la galería<input id="corr-foto-gal" type="file" accept="image/*" hidden></label></div>` : '<p class="m" style="margin:0">Ya cargaste 2 fotos (el máximo). Para cambiar una, quitala con ✕.</p>'}
+      <label class="btn" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px">🖼️ De la galería<input id="corr-foto-gal" type="file" accept="image/*" multiple hidden></label></div>` : '<p class="m" style="margin:0">Ya cargaste 2 fotos (el máximo). Para cambiar una, quitala con ✕.</p>'}
     ${true ? (vid ? `<video class="vid-min" src="${vid.url}" controls playsinline></video><button class="btn" data-a="corr-video-quitar" style="width:100%;margin-top:6px">✕ Quitar el video</button>`
       : `<div style="display:flex;gap:8px;margin-top:10px">${puedeVideo() ? `<button class="btn" data-a="corr-video" style="flex:1">🎥 Grabar video</button>` : ''}
         <label class="btn" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px">🎞️ Video de la galería<input id="corr-vid-gal" type="file" accept="video/*" hidden></label></div>
@@ -1551,19 +1551,28 @@ async function corrTerminar(){
   const vb = (E.corrVideo || {})[o.ot], video = vb ? await blobDataUrl(vb.blob) : '';
   await DB.encolar({ uid: nuevoUid(), ts: fin, tipo: 'CORR', ev: 'fin', ot: o.ot, com, foto: E.corrFoto[o.ot] || '', foto2: (E.corrFoto2 || {})[o.ot] || '', video, inicio: ini, fin, min, tec: E.sesion.id });
   if (vb){ URL.revokeObjectURL(vb.url); delete E.corrVideo[o.ot]; }
-  delete E.reloj[o.ot]; delete E.corrFoto[o.ot]; if (E.corrCom) delete E.corrCom[o.ot]; await DB.set('reloj', E.reloj);
+  delete E.reloj[o.ot]; delete E.corrFoto[o.ot]; if (E.corrFoto2) delete E.corrFoto2[o.ot]; if (E.corrCom) delete E.corrCom[o.ot]; await DB.set('reloj', E.reloj);
   o.st = Object.assign({}, o.st || {}, { estado: 'terminada' }); E.cola = await DB.cola(); E.msg = '';
   E.pantalla = 'corr'; dibujar(); toast('OT ' + o.ot + ' enviada al supervisor'); sincronizar();
 }
+// Galería con varias a la vez (JT, 24/11/2026): se toman las que entren hasta 2 fotos; la cámara manda una sola
 function corrFotoElegida(input){
-  const f = input.files && input.files[0]; if (!f) return;
-  const img = new Image(), url = URL.createObjectURL(f);
-  img.onload = () => { const m = 1024, k = Math.min(1, m / Math.max(img.width, img.height)), cv = document.createElement('canvas');
-    cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k); cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-    const d = cv.toDataURL('image/jpeg', 0.7); E.corrFoto2 = E.corrFoto2 || {};
-    if (!E.corrFoto[E.corrOt]) E.corrFoto[E.corrOt] = d; else if (!E.corrFoto2[E.corrOt]) E.corrFoto2[E.corrOt] = d; else toast('Ya hay 2 fotos: quitá una para cambiarla');
-    URL.revokeObjectURL(url); input.value = ''; dibujar(); };
-  img.src = url;
+  const ot = E.corrOt, L = [...(input.files || [])]; if (!L.length) return;
+  E.corrFoto2 = E.corrFoto2 || {};
+  const libres = (E.corrFoto[ot] ? 0 : 1) + (E.corrFoto2[ot] ? 0 : 1);
+  if (!libres){ toast('Ya hay 2 fotos: quitá una para cambiarla'); input.value = ''; return; }
+  const usar = L.slice(0, libres);
+  const achicar = f => new Promise(ok => { const img = new Image(), url = URL.createObjectURL(f);
+    img.onload = () => { const m = 1024, k = Math.min(1, m / Math.max(img.width, img.height)), cv = document.createElement('canvas');
+      cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k); cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(url); ok(cv.toDataURL('image/jpeg', 0.7)); };
+    img.onerror = () => { URL.revokeObjectURL(url); ok(''); }; img.src = url; });
+  (async () => {
+    for (const f of usar){ const d = await achicar(f); if (!d) continue;
+      if (!E.corrFoto[ot]) E.corrFoto[ot] = d; else if (!E.corrFoto2[ot]) E.corrFoto2[ot] = d; }
+    if (L.length > usar.length) toast('Se cargaron ' + usar.length + ' (máximo 2 fotos por OT)');
+    input.value = ''; dibujar();
+  })();
 }
 // ---- Video corto de la correctiva (JT, 17/11/2026): se graba dentro de la app, hasta VID_SEG s, en calidad liviana
 // (~1,2 Mbit/s, unos 2 MB) para que se envíe rápido con datos. Sin señal queda guardado y se envía solo, como la foto.
