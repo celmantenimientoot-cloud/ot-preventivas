@@ -36,6 +36,7 @@ h2{font-size:17px;margin:4px 0 0}
 .cam video{width:100%;height:100%;object-fit:cover}
 .cam .marco{position:absolute;width:56%;aspect-ratio:1;border:3px solid #fff;border-radius:14px;box-shadow:0 0 0 999px rgba(0,0,0,.25)}
 .cam span{position:absolute;bottom:10px;left:0;right:0;font-size:14px;text-shadow:0 1px 3px #000}
+.cam span button{background:#fff;color:#12302b;border:0;border-radius:8px;padding:6px 10px;font-weight:600;font-size:14px;margin-top:4px}.cam span{padding:0 10px}
 .o{text-align:center;color:var(--muted);font-size:14px}
 label.f{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted)}
 label.f input,label.f select,label.f textarea{border:1px solid #b4c2bd;border-radius:9px;padding:10px 12px;min-height:46px;background:#fff;color:var(--ink);font-size:16px}
@@ -266,47 +267,79 @@ function cargarJsQR(){
   if (window.jsQR) return Promise.resolve();
   return _jsqr || (_jsqr = new Promise((ok, mal) => { const sc = document.createElement('script'); sc.src = 'jsQR.js'; sc.onload = ok; sc.onerror = () => { _jsqr = null; mal(new Error('no se pudo cargar el lector de QR')); }; document.head.appendChild(sc); }));
 }
+// Lector propio (jsQR) sobre la imagen de la cámara: en el iPhone siempre, y de respaldo en Android
+async function detectorJsQR(){
+  await cargarJsQR();
+  const cv = document.createElement('canvas'), g = cv.getContext('2d', { willReadFrequently: true });
+  return { detect: async el => { const w = el.videoWidth, h = el.videoHeight; if (!w || !h) return [];
+    const k = Math.min(1, 800 / Math.max(w, h)); cv.width = Math.round(w * k); cv.height = Math.round(h * k);
+    g.drawImage(el, 0, 0, cv.width, cv.height); const im = g.getImageData(0, 0, cv.width, cv.height);
+    const r = window.jsQR(im.data, cv.width, cv.height, { inversionAttempts: 'attemptBoth' }); return r ? [{ rawValue: r.data }] : []; } };
+}
+// Cámara que se está usando (la elige el técnico con "Probar otra cámara" si la de atrás por defecto se ve negra)
+CAM.idx = -1;
 async function iniciarCamara(alLeer){
   pararCamara();
-  const gen = CAM.gen, v0 = document.getElementById('video'), aviso = document.getElementById('cam-aviso');
+  const gen = CAM.gen, v0 = document.getElementById('video'), aviso = () => document.getElementById('cam-aviso') || {};
   if (!v0) return;
   CAM.abriendo = true;
   let stream = null;
   try {
-    // Lector del navegador (Chrome en Android); si no hay (Safari del iPhone), jsQR sobre la imagen de la cámara
-    let det = null;
-    if ('BarcodeDetector' in window) det = new BarcodeDetector({ formats: ['qr_code'] });
-    else {
-      await cargarJsQR();
-      const cv = document.createElement('canvas'), g = cv.getContext('2d', { willReadFrequently: true });
-      det = { detect: async el => { const w = el.videoWidth, h = el.videoHeight; if (!w || !h) return [];
-        const k = Math.min(1, 800 / Math.max(w, h)); cv.width = Math.round(w * k); cv.height = Math.round(h * k);
-        g.drawImage(el, 0, 0, cv.width, cv.height); const im = g.getImageData(0, 0, cv.width, cv.height);
-        const r = window.jsQR(im.data, cv.width, cv.height, { inversionAttempts: 'dontInvert' }); return r ? [{ rawValue: r.data }] : []; } };
-    }
+    // Lector del celular (Chrome en Android) y, de respaldo, el lector propio: algunos Android traen el del celular
+    // pero no lee (24/11/2026, HP con la app instalada como acceso directo). Si no hay (Safari del iPhone), el propio.
+    let nativo = null, propio = null;
+    if ('BarcodeDetector' in window) try {
+      const f = BarcodeDetector.getSupportedFormats ? await BarcodeDetector.getSupportedFormats() : ['qr_code'];
+      if (f.indexOf('qr_code') >= 0) nativo = new BarcodeDetector({ formats: ['qr_code'] });
+    } catch(e){ nativo = null; }
+    try { propio = await detectorJsQR(); } catch(e){ if (!nativo) throw e; }
     // Más resolución y enfoque continuo (si la cámara lo permite): el QR se toma más fácil y de más lejos
-    stream = await navigator.mediaDevices.getUserMedia({ audio: false,
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 }, advanced: [{ focusMode: 'continuous' }] } });
+    let video = { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 }, advanced: [{ focusMode: 'continuous' }] };
+    if (CAM.idx >= 0) try { // eligió otra cámara: se usa esa
+      const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+      if (cams.length) video = { deviceId: { exact: cams[CAM.idx % cams.length].deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } };
+    } catch(e){}
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video });
     if (gen !== CAM.gen){ stream.getTracks().forEach(t => t.stop()); return; } // mientras abría, la pantalla cambió
     CAM.stream = stream; CAM.abriendo = false;
     const vid = () => document.getElementById('video'); // la pantalla se redibuja: siempre el video que está a la vista
-    const v = vid(); v.srcObject = stream; await v.play().catch(() => {});
-    let ocupado = false;
+    // Sin esperar a que arranque: con una cámara que no da imagen, play() no termina nunca y no se llegaba a leer ni a avisar
+    const v = vid(); v.srcObject = stream; v.play().catch(() => {});
+    CAM.sinImagen = false;
+    let ocupado = false, turno = 0;
+    const t0 = Date.now();
     CAM.timer = setInterval(async () => {
       if (gen !== CAM.gen){ clearInterval(CAM.timer); return; }
       const el = vid();
-      if (ocupado || !el || el.readyState < 2) return;
+      if (ocupado || !el) return;
+      // Primero conectar la cámara al cuadro que está a la vista (si se redibujó, el cuadro nuevo todavía no tiene imagen)
       if (el.srcObject !== stream){ el.srcObject = stream; el.play().catch(() => {}); return; }
+      if (el.readyState < 2 || !el.videoWidth){
+        // A los 4 segundos sin imagen: se avisa y se ofrece otra cámara (algunos Android abren una de atrás que se ve negra)
+        if (Date.now() - t0 > 4000 && !CAM.sinImagen){ CAM.sinImagen = true; const a = aviso(); a.innerHTML = 'La cámara no muestra imagen. <button data-a="cam-otra" style="margin-left:6px">Probar otra cámara</button>'; }
+        if (el.paused) el.play().catch(() => {});
+        return;
+      }
+      if (CAM.sinImagen){ CAM.sinImagen = false; aviso().textContent = 'Escaneá tu tarjeta'; }
       ocupado = true;
       try {
-        const c = await det.detect(el);
-        if (c.length && gen === CAM.gen){ const txt = c[0].rawValue.trim(); pararCamara(); if (navigator.vibrate) navigator.vibrate(80); alLeer(txt); return; } // una sola lectura
+        // Se turnan los dos lectores: si el del celular no lee, el propio sí
+        const det = nativo && (!propio || turno++ % 2 === 0) ? nativo : propio;
+        let c = [];
+        try { c = await det.detect(el); } catch(e){ if (det === nativo){ nativo = null; } } // el del celular falló: queda solo el propio
+        if (c.length && gen === CAM.gen){ const txt = String(c[0].rawValue || '').trim(); if (txt){ pararCamara(); if (navigator.vibrate) navigator.vibrate(80); alLeer(txt); return; } } // una sola lectura
       } catch(e){}
       ocupado = false;
     }, 200);
   } catch(e){
     if (stream) stream.getTracks().forEach(t => t.stop());
-    if (gen === CAM.gen){ CAM.abriendo = false; aviso.textContent = 'No se pudo abrir la cámara: ' + e.message; }
+    if (gen === CAM.gen){
+      CAM.abriendo = false;
+      // Permiso de cámara bloqueado (pasa con la app instalada como acceso directo si alguna vez se tocó "No permitir")
+      const bloq = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
+      const a = aviso(); a.innerHTML = bloq ? 'La cámara está <b>bloqueada</b> para esta app. En Ajustes › Apps › OT Mantenimiento (o Chrome) › Permisos › Cámara › <b>Permitir</b>. Mientras tanto, entrá con tus iniciales y tu PIN.'
+        : 'No se pudo abrir la cámara (' + esc(e && e.message || e) + '). <button data-a="cam-otra" style="margin-left:6px">Probar otra cámara</button>';
+    }
   }
 }
 // Con la app minimizada se apaga la cámara; al volver, se abre de nuevo
@@ -1747,7 +1780,7 @@ function dibujar(){
   const camara = E.pantalla === 'escanear' || (E.pantalla === 'vincular-tec' && !E.vinculando) || (E.pantalla === 'login' && (esTec() ? E.usarTarjeta : !E.bomberoPin));
   if (!camara) pararCamara();
   else if ((!CAM.stream && !CAM.abriendo) || antes !== E.pantalla) iniciarCamara(E.pantalla === 'login' ? entrarConQR : E.pantalla === 'vincular-tec' ? txt => vincularTec({ qr: txt }) : txt => abrirControl(txt));
-  else { const vid = document.getElementById('video'); if (vid && CAM.stream){ vid.srcObject = CAM.stream; vid.play().catch(() => {}); } }
+  else { const vid = document.getElementById('video'); if (vid && CAM.stream && vid.srcObject !== CAM.stream){ vid.srcObject = CAM.stream; vid.play().catch(() => {}); } }
 }
 
 /* ---------- acciones ---------- */
@@ -1809,6 +1842,7 @@ document.addEventListener('click', async ev => {
     psCargar({ accion: 'asignar', ids, tecs: PS.tecs }); return; }
   if (a === 'ext-tog'){ E.extAbierto = !E.extAbierto; dibujar(); return; }
   if (a === 'sup-ed'){ E.supEd = t.dataset.e || ''; dibujar(); return; } // botones de edificio (JT, 20/11/2026)
+  if (a === 'cam-otra'){ CAM.idx = CAM.idx + 1; CAM.sinImagen = false; pararCamara(); dibujar(); return; } // otra cámara del celular (la de atrás por defecto se veía negra)
   if (a === 'sup-lista'){ E.pantalla = 'corrSup'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'sup-ot'){ E.supOt = t.dataset.ot; E.pantalla = 'corrSupOt'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'sup-cerrar' || a === 'sup-relevante' || a === 'sup-devolver'){ supAccion(a.slice(4) === 'cerrar' ? 'cerrar' : a.slice(4)); return; }
