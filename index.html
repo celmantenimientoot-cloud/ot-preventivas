@@ -1720,7 +1720,7 @@ function vCorrSup(){
   <h2 style="margin:4px 0 6px">Para cerrar (${C.length})</h2>
   ${C.length ? C.map(o => `<button class="card" data-a="sup-ot" data-ot="${esc(o.ot)}" style="text-align:left;width:100%;cursor:pointer">
     <div class="t"><b>OT ${esc(o.ot)}</b> ${critPill(o.crit)} ${o.st.foto ? `<span class="pill p-i">${o.st.foto2 ? '2 fotos' : 'Con foto'}</span>` : ''}</div><div style="margin:4px 0">${esc(o.desc)}</div>
-    <div class="m">${o.ed ? esc(o.ed) + ' · ' : ''}${esc(o.st.tec)} · <b>${o.st.min} min</b>${o.est ? ` · estimado ${o.est} min ${dif(o) > 0 ? `<span class="pill p-w">+${dif(o)} min</span>` : '<span class="pill p-ok">dentro</span>'}` : ''}</div></button>`).join('')
+    <div class="m">${(() => { const q = supCuando(o); return q.hecha ? `📅 Hecha ${esc(q.hecha)} ${q.pill}<br>` : ''; })()}${o.ed ? esc(o.ed) + ' · ' : ''}${esc(o.st.tec)} · <b>${o.st.min} min</b>${o.est ? ` · estimado ${o.est} min ${dif(o) > 0 ? `<span class="pill p-w">+${dif(o)} min</span>` : '<span class="pill p-ok">dentro</span>'}` : ''}</div></button>`).join('')
   : '<div class="aviso p-ok">✔ No hay OT para cerrar.</div>'}
   <h2 style="margin:16px 0 6px">En curso (${K.length})</h2>
   <p class="m" style="margin:0 0 8px">Si un técnico te avisa que tiene que frenar, la pausás acá; cuando vuelve, la reanudás.</p>
@@ -1749,14 +1749,29 @@ window.addEventListener('popstate', () => {
   if (document.getElementById('grab')){ vidCerrar(); return; }
   const b = botonAtras(); if (b){ b.click(); setTimeout(atrasPreparar, 0); }
 });
+// Cuándo la hizo el técnico vs. la fecha asignada (JT, 24/11/2026); "llegó" si se envió mucho después (sin señal)
+const SUP_DS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+const supDia = iso => { const s = String(iso || '').slice(0, 10); if (!s) return ''; const d = new Date(s + 'T12:00'); return SUP_DS[d.getDay()] + ' ' + s.slice(8, 10) + '/' + s.slice(5, 7); };
+const supIsoDMY = t => { const m = String(t || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return m ? m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0') : (/^\d{4}-\d{2}-\d{2}/.test(String(t || '')) ? String(t).slice(0, 10) : ''); };
+function supCuando(o){
+  const st = o.st || {}, f = String(st.fin || '').slice(0, 10), e = supIsoDMY(o.ejec);
+  if (!f) return { hecha: '', pill: '', lleg: '', asig: e };
+  const dd = e ? Math.round((new Date(f + 'T12:00') - new Date(e + 'T12:00')) / 864e5) : null;
+  const pill = dd == null ? '' : dd === 0 ? '<span class="pill p-ok">en fecha</span>' : dd > 0 ? `<span class="pill p-w">${dd} día${dd > 1 ? 's' : ''} después</span>` : `<span class="pill p-i">${-dd} día${dd < -1 ? 's' : ''} antes</span>`;
+  const lleg = st.enviado && (new Date(st.enviado) - new Date(st.fin)) > 2 * 3600e3 ? `llegó ${supDia(st.enviado)} ${String(st.enviado).slice(11, 16)} (sin señal)` : '';
+  return { hecha: supDia(st.inicio || st.fin), pill, lleg, asig: e };
+}
 function vCorrSupOt(){
   const o = (E.cat.corrCerrar || []).find(x => x.ot === E.supOt);
   if (!o){ E.pantalla = 'corrSup'; return vCorrSup(); }
   const st = o.st, d = o.est ? st.min - o.est : 0;
   return barra('OT ' + esc(o.ot), 'Para cerrar', '<button data-a="sup-lista">‹ Supervisor</button>') + `<main>${aviso()}
   <div class="card"><div class="t" style="font-size:17px">${esc(o.desc)}</div><div class="m">${esc([o.ed, pisoTxt(o.piso), o.eq].filter(Boolean).join(' · '))} · ${critPill(o.crit)}</div></div>
-  <div class="card"><div class="kv">${[['Técnico', esc(st.tec)], ['Tiempo', `<b>${st.min} min</b>${st.inicio ? ` · de ${esc(st.inicio.slice(11, 16))} a ${esc(String(st.fin).slice(11, 16))}` : ''}${st.pausas ? ` · ${st.pausas} pausa(s)` : ''}`],
-    ['Estimado', o.est ? `${o.est} min ${d > 0 ? `<span class="pill p-w">+${d} min</span>` : '<span class="pill p-ok">dentro</span>'}` : '–'], ['Qué hizo', esc(st.com)]].map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>
+  <div class="card"><div class="kv">${(() => { const q = supCuando(o); return [['Técnico', esc(st.tec)],
+    ['Hecha', `${esc(q.hecha)}${st.inicio ? ` · de ${esc(st.inicio.slice(11, 16))} a ${esc(String(st.fin).slice(11, 16))}` : ''} ${q.pill}${q.lleg ? `<br><span style="font-weight:400;color:#5f6b68">${esc(q.lleg)}</span>` : ''}`],
+    ['Asignada para', q.asig ? esc(q.asig.slice(8, 10) + '/' + q.asig.slice(5, 7)) : '–'],
+    ['Tiempo', `<b>${st.min} min</b>${st.pausas ? ` · ${st.pausas} pausa(s)` : ''}`],
+    ['Estimado', o.est ? `${o.est} min ${d > 0 ? `<span class="pill p-w">+${d} min</span>` : '<span class="pill p-ok">dentro</span>'}` : '–'], ['Qué hizo', esc(st.com)]]; })().map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>
     ${fotoMin(st.foto)}${fotoMin(st.foto2)}${st.video ? `<a class="btn" href="${esc(st.video)}" target="_blank" rel="noopener" style="display:block;text-align:center;margin-top:8px">🎥 Ver video</a>` : ''}</div>
   <label class="f">Tiempo validado (min) · el sistema contó ${st.min} min<input id="sup-min" type="number" min="1" inputmode="numeric" value="${st.min}"></label>
   <button class="big" data-a="sup-cerrar" style="background:var(--ok)" ${E.online ? '' : 'disabled'}>Cerrar como realizada</button>
