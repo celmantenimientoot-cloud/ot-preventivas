@@ -107,6 +107,7 @@ button.card{font:inherit;color:inherit}
 .plano-w{overflow:auto;border:1px solid #b4c2bd;border-radius:9px;max-height:68vh;margin-top:6px;background:#fff;-webkit-overflow-scrolling:touch}
 .plano{position:relative}.plano img{width:100%;display:block;user-select:none;-webkit-user-select:none}
 .plano .pt{position:absolute;transform:translate(-50%,-50%);min-width:30px;height:30px;border-radius:15px;border:2px solid #c0392b;background:rgba(255,255,255,.88);font:700 11px system-ui,sans-serif;padding:0 3px;color:#c0392b;line-height:26px}
+.plano span.pt{display:block;text-align:center;pointer-events:none} /* plano de la falla en la OT correctiva: solo se mira */
 .plano .pt{z-index:1}.plano .pt:not(.ok):not(.mal){z-index:3}.plano .pt.pt-flash{z-index:5;animation:ptflash .5s 5 alternate;box-shadow:0 0 0 6px rgba(233,115,12,.55)}@keyframes ptflash{to{transform:translate(-50%,-50%) scale(1.5)}}
 .pt-falta{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.pt-falta button{min-height:34px;padding:0 10px;border:2px solid #c0392b;border-radius:17px;background:#fff;color:#c0392b;font-weight:700}
 .plano .pt.ok{background:#15803d;border-color:#15803d;color:#fff;font-size:15px}.plano .pt.mal{background:#c0392b;color:#fff;font-size:14px}
@@ -1528,7 +1529,31 @@ function vCorrOt(){
     <div class="kv" style="margin-top:8px">${[['Criticidad', critPill(o.crit) || '–'], ['Instalación', esc(o.inst)], ['Familia', esc(o.fam)], ['Lugar', esc([pisoTxt(o.piso), o.sector].filter(Boolean).join(' · '))],
       ['Equipo', esc(o.eq)], ['Tarea', esc(o.adic)], ['Asignó', esc(o.asigPor)], ['Con', esc((o.con || []).join(', '))], ['Tiempo estimado', o.est ? o.est + ' min' : ''], ['Ejecución', fIso(o.ejec) ? esc(fmtD(fIso(o.ejec))) : '']].filter(x => x[1]).map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>
     ${o.eq || o.piso ? `<button class="btn h-eq" data-a="h-equipo" data-q="${esc(o.eq || '')}" data-piso="${esc(o.piso || '')}" data-ed="${esc(o.ed || '')}" data-inst="${o.eq ? '' : esc(o.inst || '')}" data-volver="corrOt" style="margin-top:10px">🔎 Ver historial de ${o.eq ? 'este equipo' : 'este piso'}</button>` : ''}</div>
+  ${o.plano ? vPlanoFalla(o.plano) : ''}
   ${cuerpo}</main>`;
+}
+// OT que salió de un ensayo con plano (iluminación o tomas de cocheras): el plano con SOLO los puntos que dieron falla, para
+// ubicarse entre cientos de circuitos (JT, 25/11/2026). Mismo zoom y pantalla completa que en el ensayo; no se marca nada.
+function vPlanoFalla(P){
+  const zoom = E.planoZoom || 3, cods = P.tipo === 'toma' ? PT_COD_TOMA : PT_COD, porC = {};
+  P.pts.forEach(q => { (porC[q[0]] = porC[q[0]] || []).push((cods[q[3]] || [q[3], q[3]])[1]); });
+  const lista = Object.keys(porC).sort((a, b) => a.localeCompare(b, 'es', { numeric: true })).map(c => `<b>${esc(c)}</b>: ${esc(porC[c].join(', '))}`).join(' · ');
+  return `<div class="card"><div class="t">📍 Dónde está la falla (${P.pts.length} ${P.tipo === 'toma' ? (P.pts.length === 1 ? 'toma' : 'tomas') : (P.pts.length === 1 ? 'luminaria' : 'luminarias')})</div>
+    <p class="m" style="margin:2px 0 6px">${lista}</p>
+    <div class="grid3"><button class="btn" data-a="pt-zoom" data-z="-1">Alejar −</button><button class="btn" data-a="pt-zoom" data-z="1">Acercar +</button><button class="btn" data-a="pt-full">⛶ Pantalla completa</button></div>
+    ${P.pts.length > 1 ? `<button class="btn" data-a="pt-falla-sig" style="width:100%;margin-top:6px">Ir a la siguiente falla ›</button>` : ''}
+    <div class="pf-barra" id="pf-barra"><button data-a="pt-zoom" data-z="-1" aria-label="Alejar">−</button><button data-a="pt-zoom" data-z="1" aria-label="Acercar">+</button>${P.pts.length > 1 ? '<button data-a="pt-falla-sig">Siguiente ›</button>' : `<span>${P.pts.length} con falla</span>`}<button data-a="pt-full" class="sal">Salir</button></div>
+    <div class="plano-w${E.planoFull ? ' full' : ''}" id="plano-w"><div class="plano" style="width:${zoom * 100}%"><img src="${esc(P.img)}" alt="Plano" draggable="false" onload="ptFallaIr(E.ptFallaI || 0, true)">
+      ${P.pts.map(q => `<span class="pt mal" title="${esc(q[0] + ': ' + (cods[q[3]] || [q[3], q[3]])[1])}" style="left:${(q[1] / P.w * 100).toFixed(2)}%;top:${(q[2] / P.h * 100).toFixed(2)}%">${esc(q[0])}</span>`).join('')}
+    </div></div>
+    <p class="m" style="margin:6px 0 0">En rojo, lo que el técnico del ensayo marcó con falla.</p></div>`;
+}
+// Centra el plano en la falla i (al abrir, la primera) y la hace titilar
+function ptFallaIr(i, quieto){
+  const w = document.getElementById('plano-w'), L = w ? w.querySelectorAll('span.pt') : []; if (!L.length) return;
+  i = ((i % L.length) + L.length) % L.length; E.ptFallaI = i; const el = L[i];
+  w.scrollLeft = el.offsetLeft - w.clientWidth / 2; w.scrollTop = el.offsetTop - w.clientHeight / 2;
+  if (!quieto){ L.forEach(x => x.classList.remove('pt-flash')); void el.offsetWidth; el.classList.add('pt-flash'); }
 }
 async function corrEmpezar(){
   const ot = E.corrOt, ts = ahoraIso();
@@ -1844,7 +1869,7 @@ document.addEventListener('click', async ev => {
   if (a === 'inst'){ E.inst = t.dataset.k; E.fTipo = ''; E.fPiso = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'corr-lista'){ E.pantalla = 'corr'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'corr-volver'){ E.pantalla = 'inicio'; E.inst = ''; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
-  if (a === 'corr-ot'){ E.corrOt = t.dataset.ot; E.vistas[E.corrOt] = 1; DB.set('vistas', E.vistas); E.pantalla = 'corrOt'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
+  if (a === 'corr-ot'){ E.corrOt = t.dataset.ot; E.ptFallaI = 0; E.vistas[E.corrOt] = 1; DB.set('vistas', E.vistas); E.pantalla = 'corrOt'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'corr-empezar'){ corrEmpezar(); return; }
   if (a === 'sup-curso'){ supAccion(t.dataset.acc, t.dataset.ot); return; }
   if (a === 'corr-terminar'){ corrTerminar(); return; }
@@ -1890,6 +1915,7 @@ document.addEventListener('click', async ev => {
     const w = document.getElementById('plano-w'); if (w) w.classList.toggle('full', E.planoFull);
     document.body.classList.toggle('plano-full', E.planoFull); return; }
   if (a === 'pt-todos'){ const it = ptTarea(t.dataset.k), v = borrador(E.ot.id).resp[t.dataset.k] || {}; it.plano.pts.forEach((q, i) => { if (!(v.pts || {})[i]) ptMarcar(t.dataset.k, i, 'ok'); }); return; }
+  if (a === 'pt-falla-sig'){ ptFallaIr((E.ptFallaI || 0) + 1); return; }
   if (a === 'pt-zoom'){ // cambia el zoom manteniendo la zona que se estaba mirando
     const w = document.getElementById('plano-w'), fx = w ? (w.scrollLeft + w.clientWidth / 2) / w.scrollWidth : .5, fy = w ? (w.scrollTop + w.clientHeight / 2) / w.scrollHeight : .5;
     const ZS = [1, 2, 3, 4, 6, 8, 10, 12], zi = ZS.reduce((b, z, j) => Math.abs(z - (E.planoZoom || 3)) < Math.abs(ZS[b] - (E.planoZoom || 3)) ? j : b, 0); // hasta 12 (JT, 19/11/2026)
