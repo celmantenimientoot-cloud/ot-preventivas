@@ -1543,7 +1543,7 @@ function vPlanoFalla(P){
     <div class="grid3"><button class="btn" data-a="pt-zoom" data-z="-1">Alejar −</button><button class="btn" data-a="pt-zoom" data-z="1">Acercar +</button><button class="btn" data-a="pt-full">⛶ Pantalla completa</button></div>
     ${P.pts.length > 1 ? `<button class="btn" data-a="pt-falla-sig" style="width:100%;margin-top:6px">Ir a la siguiente falla ›</button>` : ''}
     <div class="pf-barra" id="pf-barra"><button data-a="pt-zoom" data-z="-1" aria-label="Alejar">−</button><button data-a="pt-zoom" data-z="1" aria-label="Acercar">+</button>${P.pts.length > 1 ? '<button data-a="pt-falla-sig">Siguiente ›</button>' : `<span>${P.pts.length} con falla</span>`}<button data-a="pt-full" class="sal">Salir</button></div>
-    <div class="plano-w${E.planoFull ? ' full' : ''}" id="plano-w"><div class="plano" style="width:${zoom * 100}%"><img src="${esc(P.img)}" alt="Plano" draggable="false" onload="ptFallaIr(E.ptFallaI || 0, true)">
+    <div class="plano-w${E.planoFull ? ' full' : ''}" id="plano-w"><div class="plano" style="width:${zoom * 100}%"><img src="${esc(P.img)}" alt="Plano" draggable="false" data-falla="1">
       ${P.pts.map(q => `<span class="pt mal" title="${esc(q[0] + ': ' + (cods[q[3]] || [q[3], q[3]])[1])}" style="left:${(q[1] / P.w * 100).toFixed(2)}%;top:${(q[2] / P.h * 100).toFixed(2)}%">${esc(q[0])}</span>`).join('')}
     </div></div>
     <p class="m" style="margin:6px 0 0">En rojo, lo que el técnico del ensayo marcó con falla.</p></div>`;
@@ -1824,6 +1824,8 @@ function dibujar(){
   // No redibujar mientras se escribe en un campo de texto (se perdería el foco)
   const foco = document.activeElement && document.activeElement.id;
   app.innerHTML = v();
+  // Plano de la falla (OT correctiva): al dibujarse, se centra en la falla elegida (sin onload en el HTML: la app va dentro de una función)
+  const imgF = app.querySelector('img[data-falla]'); if (imgF){ const ir = () => ptFallaIr(E.ptFallaI || 0, true); if (imgF.complete) ir(); else imgF.addEventListener('load', ir, { once: true }); }
   if (foco && document.getElementById(foco)){ const el = document.getElementById(foco); el.focus(); if (el.setSelectionRange && el.value != null) try { el.setSelectionRange(el.value.length, el.value.length); } catch(x){} }
   E.pantallaDibujada = E.pantalla; atrasPreparar();
   const camara = E.pantalla === 'escanear' || (E.pantalla === 'vincular-tec' && !E.vinculando) || (E.pantalla === 'login' && (esTec() ? E.usarTarjeta : !E.bomberoPin));
