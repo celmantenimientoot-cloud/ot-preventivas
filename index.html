@@ -66,6 +66,7 @@ label.f input,label.f select,label.f textarea{border:1px solid #b4c2bd;border-ra
 .lista .row .mono{font-family:monospace;font-weight:700}
 .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}.seg button{flex:1;min-height:44px;border:0;background:#fff}.seg button[aria-pressed=true]{background:var(--pri);color:#fff;font-weight:600}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.eq-dist{font-size:22px;font-weight:800;color:#0a6ed1;margin:0 0 6px;letter-spacing:.01em}
 .chips.lado{margin-bottom:6px}.chips.lado button[aria-pressed=true]{background:#1d2d3e;border-color:#1d2d3e;color:#fff}
 .med-q{border-left:4px solid #0a6ed1}.med-q .t{margin-bottom:8px}.med-q .btn{min-height:48px;font-weight:700}.med-q .btn[data-v=si][aria-pressed=true]{background:#107e3e;border-color:#107e3e;color:#fff}.med-q .btn[data-v=no][aria-pressed=true]{background:#e9730c;border-color:#e9730c;color:#fff}
 .foto{max-width:100%;max-height:180px;border-radius:9px}
@@ -1087,6 +1088,9 @@ const otNum = (def => { const L = []; ((def && def.partes) || []).forEach(p => (
 const esBB = o => /ENSAYO-TRANSF-BB$/.test((o || {}).rutina || '');
 const pisoVer = o => esBB(o) ? '1SS AL 27' : o.piso;
 const ladoEq = x => { const c = String((x || {}).cod || ''); if (/AUD/i.test(c)) return 'AUD'; const m = c.match(/(AZ|PE)-BB$/); return m ? m[1] : ''; }; // + Auditorio (JT, 28/11/2026)
+// Mismo código en varios equipos de la hoja (ej. el tablero del Auditorio con los interruptores de los pisos 4, 3, 2 y 1): manda lo que los distingue
+const eqRep = (p, x) => !!x.cod && p.equipos.filter(y => y.cod === x.cod).length > 1;
+const eqDistinto = x => String(x.nombre || x.den || '').replace(/^ENSAYO DE TRANSFERENCIA AUTO\.?\s*/i, '').trim() || x.cod;
 const ladoOk = (o, x) => !esBB(o) || !E.ladoF || ladoEq(x) === E.ladoF;
 function vOt(){
   const c = E.ot, o = T_().ots.find(x => x.id === c.id), ru = o && T_().rutinas[o.rutina];
@@ -1099,7 +1103,7 @@ function vOt(){
   const chips = (L, sel, a, listo) => L.filter(x => x != null).length > 1 ? `<div class="chips">${L.map((x, i) => x == null ? '' : `<button data-a="${a}" data-i="${i}" aria-pressed="${i === sel}" class="${listo(i) ? 'hecho' : ''}">${Array.isArray(x) ? esc(x[0]) + (x[1] ? `<small>${esc(x[1])}</small>` : '') : esc(x)}</button>`).join('')}</div>` : '';
   const partes = chips(ru.def.partes.map((x, i) => parteVinc(ru, i, o) ? null : x.nombre || 'Equipos'), c.parte, 'parte', i => ru.def.partes[i].equipos.every((x, ei) => guardadoPor(o, i, ei)));
   const equipos = (esBB(o) ? `<div class="chips lado">${[['', 'Todos'], ['AZ', 'Azurduy'], ['PE', 'Pedraza'], ['AUD', 'Auditorio']].map(([v, n]) => `<button data-a="lado" data-v="${v}" aria-pressed="${(E.ladoF || '') === v}">${n}</button>`).join('')}</div>` : '')
-    + chips(p.equipos.map((x, i) => esVinc(o, c.parte, i) || !ladoOk(o, x) ? null : x.cod ? [x.cod, x.den || x.nombre] : [x.nombre]), c.eq, 'equipo', i => guardadoPor(o, c.parte, i));
+    + chips(p.equipos.map((x, i) => esVinc(o, c.parte, i) || !ladoOk(o, x) ? null : eqRep(p, x) ? [eqDistinto(x), x.cod] : x.cod ? [x.cod, x.den || x.nombre] : [x.nombre]), c.eq, 'equipo', i => guardadoPor(o, c.parte, i));
   const g0 = salasDe(ru), gS = g0 && g0.map(s => Object.assign({}, s, { eqs: s.eqs.filter(([pi, ei]) => !esVinc(o, pi, ei)) })).filter(s => s.eqs.length), g = gS && gS.length ? gS : null;
   let porSala = '', salaAct = null;
   if (g){ // 1) la sala técnica donde está · 2) solo los equipos de esa sala
@@ -1140,7 +1144,7 @@ function vOt(){
   ${(o.con || []).length && o.estado !== 'hecha' ? `<div class="aviso p-i">La compartís con <b>${esc(o.con.join(', '))}</b>. Repártanse los equipos: lo que guarda cada uno le aparece al otro cuando tiene señal.</div>` : ''}
   ${porSala || partes + equipos}
   <button class="btn h-eq" data-a="h-equipo" data-q="${esc(e.cod || e.den || e.nombre || '')}" data-piso="${esc(o.piso || '')}" data-ed="${esc(o.ed || (/^(CEL|CEN|EC)-/i.exec(e.cod || '') || [])[1] || '')}" style="width:100%;margin:0 0 8px">🔎 Ver historial de este equipo</button>
-  <div class="card">${salaAct ? `<div class="sala-eq">📍 ${esc(salaAct.n)}</div>` : ''}${e.cod ? `<div class="cod-eq">${esc(e.cod)}</div>` : ''}
+  <div class="card">${salaAct ? `<div class="sala-eq">📍 ${esc(salaAct.n)}</div>` : ''}${eqRep(p, e) ? `<div class="eq-dist">${esc(eqDistinto(e))}</div>` : ''}${e.cod ? `<div class="cod-eq">${esc(e.cod)}</div>` : ''}
     ${e.den ? `<div class="den-eq">${esc(e.den)}</div>` : `<div class="t">${esc(e.nombre || e.cod)}</div>`}
     ${RUT_TXT[(o.tipos || {})[c.parte + '|' + c.eq]] ? `<div class="m">Rutina de este equipo: ${rutPill((o.tipos || {})[c.parte + '|' + c.eq])}</div>` : ''}
     ${cerrado && /^SIN MEDIDOR/.test(por) ? `<div class="m"><span class="pill p-i">Sin medidor${/sin enviar/.test(por) ? ' · sin enviar' : ''}</span></div>`
@@ -1845,6 +1849,8 @@ async function supAccion(accion, ot){
   catch(e){ if (!sinAcceso(e)){ E.msg = e.message; dibujar(); } }
 }
 
+// Las listas de hojas y equipos se deslizan a lo elegido (si no, una hoja o un equipo quedaba fuera de la pantalla)
+function chipsAlElegido(){ document.querySelectorAll('.chips').forEach(ch => { const b = ch.querySelector('button[aria-pressed="true"]'); if (b && ch.scrollWidth > ch.clientWidth) ch.scrollLeft = Math.max(0, b.offsetLeft - ch.offsetLeft - 12); }); }
 function dibujar(){
   const app = document.getElementById('app'), antes = E.pantallaDibujada;
   if (E.qr && E.pantalla === 'inicio' && E.sesion){ if (esTec()){ E.pantalla = 'historial'; setTimeout(cargarHistorial, 0); } else { E.qr = null; E.msg = 'Ese QR es para la app de los técnicos (celular).'; } }
@@ -1856,7 +1862,7 @@ function dibujar(){
   // Plano de la falla (OT correctiva): al dibujarse, se centra en la falla elegida (sin onload en el HTML: la app va dentro de una función)
   const imgF = app.querySelector('img[data-falla]'); if (imgF){ const ir = () => ptFallaIr(E.ptFallaI || 0, true); if (imgF.complete) ir(); else imgF.addEventListener('load', ir, { once: true }); }
   if (foco && document.getElementById(foco)){ const el = document.getElementById(foco); el.focus(); if (el.setSelectionRange && el.value != null) try { el.setSelectionRange(el.value.length, el.value.length); } catch(x){} }
-  E.pantallaDibujada = E.pantalla; atrasPreparar();
+  E.pantallaDibujada = E.pantalla; atrasPreparar(); if (E.pantalla === 'ot') setTimeout(chipsAlElegido, 0);
   const camara = E.pantalla === 'escanear' || (E.pantalla === 'vincular-tec' && !E.vinculando) || (E.pantalla === 'login' && (esTec() ? E.usarTarjeta : !E.bomberoPin));
   if (!camara) pararCamara();
   else if ((!CAM.stream && !CAM.abriendo) || antes !== E.pantalla) iniciarCamara(E.pantalla === 'login' ? entrarConQR : E.pantalla === 'vincular-tec' ? txt => vincularTec({ qr: txt }) : txt => abrirControl(txt));
@@ -1927,7 +1933,11 @@ document.addEventListener('click', async ev => {
   if (a === 'sup-ot'){ E.supOt = t.dataset.ot; E.pantalla = 'corrSupOt'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'sup-cerrar' || a === 'sup-relevante' || a === 'sup-devolver'){ supAccion(a.slice(4) === 'cerrar' ? 'cerrar' : a.slice(4)); return; }
   if (a === 'tec-filtro-no'){ E.fTipo = ''; E.fPiso = ''; E.fRut = ''; dibujar(); return; }
-  if (a === 'abrir-ot'){ E.ot = { id: t.dataset.id, parte: 0, eq: 0 }; E.pantalla = 'ot'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
+  if (a === 'abrir-ot'){ E.ot = { id: t.dataset.id, parte: 0, eq: 0 }; // abre en el primer equipo que falta (JT, 28/11/2026: "le sacaron la hoja" = estaba en otra hoja, fuera de la pantalla)
+    { const o = T_().ots.find(x => x.id === t.dataset.id), ru = o && T_().rutinas[o.rutina]; let s0 = null;
+      if (ru) ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!s0 && !esVinc(o, pi, ei) && !guardadoPor(o, pi, ei)) s0 = [pi, ei]; }));
+      if (s0){ E.ot.parte = s0[0]; E.ot.eq = s0[1]; } }
+    E.pantalla = 'ot'; E.msg = ''; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'parte'){ E.ot.parte = +t.dataset.i; E.ot.eq = 0; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'equipo'){ E.ot.eq = +t.dataset.i; dibujar(); window.scrollTo(0, 0); return; }
   if (a === 'ir'){ E.ot.parte = +t.dataset.p; E.ot.eq = +t.dataset.i; dibujar(); window.scrollTo(0, 0); return; }
