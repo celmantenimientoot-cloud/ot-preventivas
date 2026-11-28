@@ -66,6 +66,7 @@ label.f input,label.f select,label.f textarea{border:1px solid #b4c2bd;border-ra
 .lista .row .mono{font-family:monospace;font-weight:700}
 .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}.seg button{flex:1;min-height:44px;border:0;background:#fff}.seg button[aria-pressed=true]{background:var(--pri);color:#fff;font-weight:600}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chips.lado{margin-bottom:6px}.chips.lado button[aria-pressed=true]{background:#1d2d3e;border-color:#1d2d3e;color:#fff}
 .med-q{border-left:4px solid #0a6ed1}.med-q .t{margin-bottom:8px}.med-q .btn{min-height:48px;font-weight:700}.med-q .btn[data-v=si][aria-pressed=true]{background:#107e3e;border-color:#107e3e;color:#fff}.med-q .btn[data-v=no][aria-pressed=true]{background:#e9730c;border-color:#e9730c;color:#fff}
 .foto{max-width:100%;max-height:180px;border-radius:9px}
 .foto-min{display:block;width:100%;max-height:260px;object-fit:cover;border-radius:12px;margin-top:10px;cursor:zoom-in;background:#eef2f0}
@@ -1045,7 +1046,7 @@ function vInicioTec(){
     const pill = o.estado === 'hecha' ? '<span class="pill p-ok">Hecha</span>' : h === t ? '<span class="pill p-w">Completa · sin enviar</span>'
       : h ? `<span class="pill p-w">En curso · ${h} de ${t}</span>` : '';
     return `<button class="card" data-a="abrir-ot" data-id="${esc(o.id)}" style="text-align:left;width:100%;cursor:pointer">
-      <div class="t">${o.piso ? `<span class="piso">PISO ${esc(o.piso)}</span> · ` : ''}${otNum(ru.def) ? '<b>OT N° ' + esc(otNum(ru.def)) + '</b> · ' : ''}${esc(titPlan(ru.def, o.nombre))} ${escalerasDe(o.nombre, o.ed).map(escPill).join(' ')} ${rutinasOt(o, ru).map(rutPill).join(' ')} ${pill}</div>
+      <div class="t">${o.piso ? `<span class="piso">PISO ${esc(pisoVer(o))}</span> · ` : ''}${otNum(ru.def) ? '<b>OT N° ' + esc(otNum(ru.def)) + '</b> · ' : ''}${esc(titPlan(ru.def, o.nombre))} ${escalerasDe(o.nombre, o.ed).map(escPill).join(' ')} ${rutinasOt(o, ru).map(rutPill).join(' ')} ${pill}</div>
       <div class="m">${esc(o.semanaTxt)} · ${esc(tipoDe(o))} · ${t} equipo${t === 1 ? '' : 's'}${sinEnviar ? ' · hay equipos sin enviar' : ''}</div>
       ${(o.con || []).length ? `<div class="m">Con: <b>${esc(o.con.join(', '))}</b></div>` : ''}
       ${o.estado === 'hecha' ? '' : `<div class="prog"><i style="width:${t ? Math.round(h / t * 100) : 0}%"></i></div>`}</button>`;
@@ -1082,6 +1083,11 @@ function titPlan(def, nom){
 }
 const otNum = (def => { const L = []; ((def && def.partes) || []).forEach(p => (p.equipos || []).forEach(e => { const n = String(e.otn || '').trim(); if (!e.noPlan && n && L.indexOf(n) < 0) L.push(n); }));
   L.sort((a, b) => a.localeCompare(b, 'es', { numeric: true })); return L.length > 2 ? L[0] + ' a ' + L[L.length - 1] : L.join(' y '); }); // N.º de OT del plan
+// OT 9 (ensayo de transferencia de blindobarras): recorre del 1SS al 27 y se puede ver solo Azurduy o solo Pedraza (JT, 28/11/2026)
+const esBB = o => /ENSAYO-TRANSF-BB$/.test((o || {}).rutina || '');
+const pisoVer = o => esBB(o) ? '1SS AL 27' : o.piso;
+const ladoEq = x => { const m = String((x || {}).cod || '').match(/(AZ|PE)-BB$/); return m ? m[1] : ''; };
+const ladoOk = (o, x) => !esBB(o) || !E.ladoF || ladoEq(x) === E.ladoF;
 function vOt(){
   const c = E.ot, o = T_().ots.find(x => x.id === c.id), ru = o && T_().rutinas[o.rutina];
   if (!o || !ru){ E.pantalla = 'inicio'; return vInicioTec(); }
@@ -1092,7 +1098,8 @@ function vOt(){
   // x: texto o [principal, aclaración] (equipos: el código del plan y abajo el nombre)
   const chips = (L, sel, a, listo) => L.filter(x => x != null).length > 1 ? `<div class="chips">${L.map((x, i) => x == null ? '' : `<button data-a="${a}" data-i="${i}" aria-pressed="${i === sel}" class="${listo(i) ? 'hecho' : ''}">${Array.isArray(x) ? esc(x[0]) + (x[1] ? `<small>${esc(x[1])}</small>` : '') : esc(x)}</button>`).join('')}</div>` : '';
   const partes = chips(ru.def.partes.map((x, i) => parteVinc(ru, i, o) ? null : x.nombre || 'Equipos'), c.parte, 'parte', i => ru.def.partes[i].equipos.every((x, ei) => guardadoPor(o, i, ei)));
-  const equipos = chips(p.equipos.map((x, i) => esVinc(o, c.parte, i) ? null : x.cod ? [x.cod, x.den || x.nombre] : [x.nombre]), c.eq, 'equipo', i => guardadoPor(o, c.parte, i));
+  const equipos = (esBB(o) ? `<div class="chips lado">${[['', 'Todos'], ['AZ', 'Azurduy'], ['PE', 'Pedraza']].map(([v, n]) => `<button data-a="lado" data-v="${v}" aria-pressed="${(E.ladoF || '') === v}">${n}</button>`).join('')}</div>` : '')
+    + chips(p.equipos.map((x, i) => esVinc(o, c.parte, i) || !ladoOk(o, x) ? null : x.cod ? [x.cod, x.den || x.nombre] : [x.nombre]), c.eq, 'equipo', i => guardadoPor(o, c.parte, i));
   const g0 = salasDe(ru), gS = g0 && g0.map(s => Object.assign({}, s, { eqs: s.eqs.filter(([pi, ei]) => !esVinc(o, pi, ei)) })).filter(s => s.eqs.length), g = gS && gS.length ? gS : null;
   let porSala = '', salaAct = null;
   if (g){ // 1) la sala técnica donde está · 2) solo los equipos de esa sala
@@ -1124,7 +1131,7 @@ function vOt(){
   const exc = ((e || {}).excluir) || [], anuales = ru.sem || o.anual ? [] : p.secciones.flatMap(s => s.items).filter(it => it.frec >= 360 && exc.indexOf(it.id) < 0);
   const nE = p.secciones.reduce((n, s) => n + s.items.filter(toca).length, 0), hE = p.secciones.reduce((n, s) => n + s.items.filter(toca).filter(it => tareaLista(b.resp[claveT(c.parte, c.eq, it.id)], it)).length, 0);
   const listo = hE === nE;
-  return barra((o.piso ? 'PISO ' + o.piso + ' · ' : '') + (otNum(ru.def) ? 'OT N° ' + otNum(ru.def) + ' · ' : '') + titPlan(ru.def, o.nombre), esc(o.semanaTxt), '<button data-a="inicio">Volver</button>') + `<main>
+  return barra((o.piso ? 'PISO ' + pisoVer(o) + ' · ' : '') + (otNum(ru.def) ? 'OT N° ' + otNum(ru.def) + ' · ' : '') + titPlan(ru.def, o.nombre), esc(o.semanaTxt), '<button data-a="inicio">Volver</button>') + `<main>
   ${o.estado === 'hecha' ? '<div class="aviso p-i">Esta OT ya está terminada. Si hay que corregir algo, avisá al supervisor.</div>' : ''}
   ${escalerasDe(o.nombre, o.ed).length ? `<div class="aviso" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${escalerasDe(o.nombre, o.ed).map(escPill).join('')}</div>` : ''}
   ${(() => { const R = rutinasOt(o, ru); if (!R.length || o.estado === 'hecha') return '';
@@ -1329,8 +1336,9 @@ function irAlSiguiente(o, ru, c, msg){
     sig = orden.find(([pi, ei]) => !guardadoPor(o, pi, ei)) || null;
     if (sig && salaDe(sig[0], sig[1]) !== act) msg += ' · ' + act.n + ' completa: seguí en ' + salaDe(sig[0], sig[1]).n;
   }
-  ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!sig && !guardadoPor(o, pi, ei) && (pi > c.parte || (pi === c.parte && ei > c.eq))) sig = [pi, ei]; }));
-  ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!sig && !guardadoPor(o, pi, ei)) sig = [pi, ei]; }));
+  ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!sig && !guardadoPor(o, pi, ei) && ladoOk(o, x) && (pi > c.parte || (pi === c.parte && ei > c.eq))) sig = [pi, ei]; }));
+  ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!sig && !guardadoPor(o, pi, ei) && ladoOk(o, x)) sig = [pi, ei]; }));
+  ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!sig && !guardadoPor(o, pi, ei)) sig = [pi, ei]; })); // del lado elegido no queda nada: sigue con el otro
   const [h, t] = avanceOt(o);
   toast(msg + (h === t ? ' · OT completa' : ''));
   if (sig){ c.parte = sig[0]; c.eq = sig[1]; } else { E.ot = null; E.pantalla = 'inicio'; }
@@ -1980,6 +1988,12 @@ document.addEventListener('click', async ev => {
   if (a === 'sin-acceso'){ sinAccesoEquipo(); return; }
   if (a === 'med'){ const c = E.ot, b = borrador(c.id); b.med = b.med || {}; b.med[c.parte + '|' + c.eq] = t.dataset.v; DB.set('borradores', E.borr); dibujar(); return; }
   if (a === 'guardar-nomed'){ sinMedidorEquipo(); return; }
+  if (a === 'lado'){ E.ladoF = t.dataset.v || ''; const c = E.ot, o = c && T_().ots.find(x => x.id === c.id), ru = o && T_().rutinas[o.rutina];
+    if (ru && !ladoOk(o, ru.def.partes[c.parte].equipos[c.eq])){ let s0 = null; // va al primer lado que falte de esa columna (o al primero)
+      ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!s0 && pi === c.parte && ladoOk(o, x) && !guardadoPor(o, pi, ei)) s0 = [pi, ei]; }));
+      ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!s0 && pi === c.parte && ladoOk(o, x)) s0 = [pi, ei]; }));
+      if (s0){ c.parte = s0[0]; c.eq = s0[1]; } }
+    dibujar(); return; }
   if (a === 'tecla'){ if (esTec() && E.cat.bomberos[0]) E.bomberoPin = E.cat.bomberos[0].id; if (E.pin.length < 4) E.pin += t.dataset.n; E.msg = ''; dibujar(); if (E.pin.length === 4) entrarConPin(); return; }
   if (a === 'borrar'){ E.pin = E.pin.slice(0, -1); dibujar(); return; }
   if (a === 'pin-volver'){ E.bomberoPin = ''; E.pin = ''; E.msg = ''; dibujar(); return; }
