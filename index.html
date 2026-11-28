@@ -1086,7 +1086,7 @@ const otNum = (def => { const L = []; ((def && def.partes) || []).forEach(p => (
 // OT 9 (ensayo de transferencia de blindobarras): recorre del 1SS al 27 y se puede ver solo Azurduy o solo Pedraza (JT, 28/11/2026)
 const esBB = o => /ENSAYO-TRANSF-BB$/.test((o || {}).rutina || '');
 const pisoVer = o => esBB(o) ? '1SS AL 27' : o.piso;
-const ladoEq = x => { const m = String((x || {}).cod || '').match(/(AZ|PE)-BB$/); return m ? m[1] : ''; };
+const ladoEq = x => { const c = String((x || {}).cod || ''); if (/AUD/i.test(c)) return 'AUD'; const m = c.match(/(AZ|PE)-BB$/); return m ? m[1] : ''; }; // + Auditorio (JT, 28/11/2026)
 const ladoOk = (o, x) => !esBB(o) || !E.ladoF || ladoEq(x) === E.ladoF;
 function vOt(){
   const c = E.ot, o = T_().ots.find(x => x.id === c.id), ru = o && T_().rutinas[o.rutina];
@@ -1098,7 +1098,7 @@ function vOt(){
   // x: texto o [principal, aclaración] (equipos: el código del plan y abajo el nombre)
   const chips = (L, sel, a, listo) => L.filter(x => x != null).length > 1 ? `<div class="chips">${L.map((x, i) => x == null ? '' : `<button data-a="${a}" data-i="${i}" aria-pressed="${i === sel}" class="${listo(i) ? 'hecho' : ''}">${Array.isArray(x) ? esc(x[0]) + (x[1] ? `<small>${esc(x[1])}</small>` : '') : esc(x)}</button>`).join('')}</div>` : '';
   const partes = chips(ru.def.partes.map((x, i) => parteVinc(ru, i, o) ? null : x.nombre || 'Equipos'), c.parte, 'parte', i => ru.def.partes[i].equipos.every((x, ei) => guardadoPor(o, i, ei)));
-  const equipos = (esBB(o) ? `<div class="chips lado">${[['', 'Todos'], ['AZ', 'Azurduy'], ['PE', 'Pedraza']].map(([v, n]) => `<button data-a="lado" data-v="${v}" aria-pressed="${(E.ladoF || '') === v}">${n}</button>`).join('')}</div>` : '')
+  const equipos = (esBB(o) ? `<div class="chips lado">${[['', 'Todos'], ['AZ', 'Azurduy'], ['PE', 'Pedraza'], ['AUD', 'Auditorio']].map(([v, n]) => `<button data-a="lado" data-v="${v}" aria-pressed="${(E.ladoF || '') === v}">${n}</button>`).join('')}</div>` : '')
     + chips(p.equipos.map((x, i) => esVinc(o, c.parte, i) || !ladoOk(o, x) ? null : x.cod ? [x.cod, x.den || x.nombre] : [x.nombre]), c.eq, 'equipo', i => guardadoPor(o, c.parte, i));
   const g0 = salasDe(ru), gS = g0 && g0.map(s => Object.assign({}, s, { eqs: s.eqs.filter(([pi, ei]) => !esVinc(o, pi, ei)) })).filter(s => s.eqs.length), g = gS && gS.length ? gS : null;
   let porSala = '', salaAct = null;
@@ -1992,6 +1992,8 @@ document.addEventListener('click', async ev => {
     if (ru && !ladoOk(o, ru.def.partes[c.parte].equipos[c.eq])){ let s0 = null; // va al primer lado que falte de esa columna (o al primero)
       ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!s0 && pi === c.parte && ladoOk(o, x) && !guardadoPor(o, pi, ei)) s0 = [pi, ei]; }));
       ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!s0 && pi === c.parte && ladoOk(o, x)) s0 = [pi, ei]; }));
+      ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!s0 && ladoOk(o, x) && !guardadoPor(o, pi, ei)) s0 = [pi, ei]; })); // en otra hoja (el Auditorio tiene la suya)
+      ru.def.partes.forEach((pp, pi) => pp.equipos.forEach((x, ei) => { if (!s0 && ladoOk(o, x)) s0 = [pi, ei]; }));
       if (s0){ c.parte = s0[0]; c.eq = s0[1]; } }
     dibujar(); return; }
   if (a === 'tecla'){ if (esTec() && E.cat.bomberos[0]) E.bomberoPin = E.cat.bomberos[0].id; if (E.pin.length < 4) E.pin += t.dataset.n; E.msg = ''; dibujar(); if (E.pin.length === 4) entrarConPin(); return; }
