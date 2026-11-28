@@ -66,6 +66,7 @@ label.f input,label.f select,label.f textarea{border:1px solid #b4c2bd;border-ra
 .lista .row .mono{font-family:monospace;font-weight:700}
 .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}.seg button{flex:1;min-height:44px;border:0;background:#fff}.seg button[aria-pressed=true]{background:var(--pri);color:#fff;font-weight:600}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.med-q{border-left:4px solid #0a6ed1}.med-q .t{margin-bottom:8px}.med-q .btn{min-height:48px;font-weight:700}.med-q .btn[data-v=si][aria-pressed=true]{background:#107e3e;border-color:#107e3e;color:#fff}.med-q .btn[data-v=no][aria-pressed=true]{background:#e9730c;border-color:#e9730c;color:#fff}
 .foto{max-width:100%;max-height:180px;border-radius:9px}
 .foto-min{display:block;width:100%;max-height:260px;object-fit:cover;border-radius:12px;margin-top:10px;cursor:zoom-in;background:#eef2f0}
 .foto-ley{font-size:13px;color:var(--muted);margin-top:4px}
@@ -919,6 +920,7 @@ function guardadoPor(ot, pi, ei){
   if ((ot.hechos || {})[pi + '|' + ei]) return ot.hechos[pi + '|' + ei];
   const pre = pi + '|' + ei + '|';
   if (E.cola.some(r => r.tipo === 'TERMO' && r.otsem === ot.id && r.sinAcceso && r.sinAcceso.parte === pi && r.sinAcceso.eq === ei)) return 'SIN ACCESO (sin enviar)';
+  if (E.cola.some(r => r.tipo === 'TERMO' && r.otsem === ot.id && r.sinMedidor && r.sinMedidor.parte === pi && r.sinMedidor.eq === ei)) return 'SIN MEDIDOR (sin enviar)';
   return E.cola.some(r => r.tipo === 'TERMO' && r.otsem === ot.id && Object.keys(r.resp || {}).some(k => k.startsWith(pre))) ? 'vos (sin enviar)' : '';
 }
 function avanceOt(ot){
@@ -1104,8 +1106,10 @@ function vOt(){
     porSala = `<div class="paso">1 · ¿En qué sala técnica estás?</div><div class="chips salas">${salas}</div>
     <div class="paso">2 · Equipos de <b>${esc(salaAct.n)}</b> (${salaAct.eqs.length})</div><div class="chips">${eqs}</div>`;
   }
+  // ¿Tiene medidor? (JT, 28/11/2026): en el ensayo de transferencia de blindobarras (OT 9), por lado. Si no tiene, se guarda así y sigue
+  const pideMed = /ENSAYO-TRANSF-BB$/.test(o.rutina), med = ((b.med || {})[c.parte + '|' + c.eq]) || '', sinMedQ = pideMed && !cerrado && med !== 'si';
   let html = '';
-  if (!cerrado) p.secciones.forEach(s => {
+  if (!cerrado && !sinMedQ) p.secciones.forEach(s => {
     const items = s.items.filter(toca); if (!items.length) return;
     html += `<div class="sec">${esc(s.titulo)}</div>`;
     items.forEach(it => {
@@ -1132,17 +1136,22 @@ function vOt(){
   <div class="card">${salaAct ? `<div class="sala-eq">📍 ${esc(salaAct.n)}</div>` : ''}${e.cod ? `<div class="cod-eq">${esc(e.cod)}</div>` : ''}
     ${e.den ? `<div class="den-eq">${esc(e.den)}</div>` : `<div class="t">${esc(e.nombre || e.cod)}</div>`}
     ${RUT_TXT[(o.tipos || {})[c.parte + '|' + c.eq]] ? `<div class="m">Rutina de este equipo: ${rutPill((o.tipos || {})[c.parte + '|' + c.eq])}</div>` : ''}
-    ${cerrado && /^SIN ACCESO/.test(por) ? `<div class="m"><span class="pill p-b">🚫 Sin acceso${/sin enviar/.test(por) ? ' · sin enviar' : ''}</span></div>`
+    ${cerrado && /^SIN MEDIDOR/.test(por) ? `<div class="m"><span class="pill p-i">Sin medidor${/sin enviar/.test(por) ? ' · sin enviar' : ''}</span></div>`
+    : cerrado && /^SIN ACCESO/.test(por) ? `<div class="m"><span class="pill p-b">🚫 Sin acceso${/sin enviar/.test(por) ? ' · sin enviar' : ''}</span></div>`
     : cerrado ? `<div class="m"><span class="pill p-ok">Guardado por ${esc(por)}</span></div>`
+    : sinMedQ ? `<div class="m">${med === 'no' ? 'No tiene medidor: no lleva ensayo' : 'Falta responder si tiene medidor'}</div>`
     : `<div class="m" id="ot-prog-m">${hE} de ${nE} tareas</div><div class="prog"><i id="ot-prog-i" style="width:${nE ? Math.round(hE / nE * 100) : 0}%"></i></div>`}</div>
-  ${cerrado && /^SIN ACCESO/.test(por) ? '<p class="o">Quedó sin realizar porque no hubo acceso. Cuando el supervisor coordine el acceso, te lo devuelve y aparece de nuevo para hacerlo.</p>'
+  ${pideMed && !cerrado ? `<div class="card med-q"><div class="t">¿Tiene medidor este lado?</div><div class="grid2"><button class="btn${med === 'si' ? ' on' : ''}" data-a="med" data-v="si" aria-pressed="${med === 'si'}">✔ Sí, tiene</button><button class="btn${med === 'no' ? ' on' : ''}" data-a="med" data-v="no" aria-pressed="${med === 'no'}">✖ No tiene</button></div>
+    ${med === 'no' ? '<p class="m" style="margin:8px 0 0">No hace falta hacer el ensayo: guardalo y seguí con el siguiente piso o lado.</p>' : !med ? '<p class="m" style="margin:8px 0 0">Respondé primero: si tiene medidor, aparecen las tareas del ensayo.</p>' : ''}</div>` : ''}
+  ${cerrado && /^SIN MEDIDOR/.test(por) ? '<p class="o">Este lado no tiene medidor: quedó guardado sin ensayo.</p>' : ''}
+  ${sinMedQ ? '' : cerrado && /^SIN MEDIDOR/.test(por) ? '' : cerrado && /^SIN ACCESO/.test(por) ? '<p class="o">Quedó sin realizar porque no hubo acceso. Cuando el supervisor coordine el acceso, te lo devuelve y aparece de nuevo para hacerlo.</p>'
     : cerrado ? '<p class="o">Este equipo ya está guardado. Si hay que corregir algo, avisá al supervisor.</p>' : `<div class="grid2"><button class="btn" data-a="todo-ok">Marcar todo ✔</button><button class="btn" data-a="todo-borrar" ${hE ? '' : 'disabled'}>Desmarcar todo este equipo</button></div>
     <p class="m" style="margin:0">Para desmarcar una sola tarea, tocá de nuevo el ✔, la ✖ o N/A. <b>N/A = no aplica</b>: esa tarea no existe en este equipo (por ejemplo, no tiene segundo motor). No va como problema: el supervisor la saca de la rutina.</p>`}
   <div>${html}</div>
   ${anuales.length && !cerrado ? `<details><summary class="m">${anuales.length} tareas anuales: no se hacen esta semana</summary>${anuales.map(it => `<div class="it2 m">${esc(it.t)}</div>`).join('')}</details>` : ''}
   ${o.estado === 'hecha' || cerrado ? '' : `<label class="f">Observación de ${e.noPlan ? 'esta sala (opcional, va solo con esta sala)' : 'este equipo (opcional, va solo con este equipo)'}<textarea id="eq-obs" rows="2" maxlength="500">${esc((b.obsEq || {})[c.parte + '|' + c.eq] || '')}</textarea></label>`}
   ${aviso()}
-  ${cerrado ? '' : `<button class="big" id="ot-guardar" data-a="guardar-eq" ${listo ? '' : 'disabled'}>${listo ? 'GUARDAR ESTE EQUIPO' : `Guardar este equipo (faltan ${nE - hE} tareas)`}</button>
+  ${cerrado ? '' : sinMedQ ? (med === 'no' ? `<button class="big" data-a="guardar-nomed">GUARDAR: NO TIENE MEDIDOR</button>` : `<button class="big" disabled>Primero respondé si tiene medidor</button>`) : `<button class="big" id="ot-guardar" data-a="guardar-eq" ${listo ? '' : 'disabled'}>${listo ? 'GUARDAR ESTE EQUIPO' : `Guardar este equipo (faltan ${nE - hE} tareas)`}</button>
     <button class="btn" data-a="sin-acceso" style="width:100%;margin-top:8px">🚫 Sin acceso a este equipo</button>`}
   <p class="o">${h} de ${t} equipos guardados · la OT se cierra sola cuando están todos</p></main>`;
 }
@@ -1284,6 +1293,18 @@ async function guardarEquipo(){
 }
 // Sin acceso (05/11/2026): no se pudo entrar a la sala. El equipo queda sin realizar y se cierra para el técnico;
 // va a la bandeja del supervisor, que se lo devuelve cuando coordina el acceso.
+// Sin medidor (28/11/2026): el lado se guarda sin tareas (no va a la bandeja) y sigue con el siguiente
+async function sinMedidorEquipo(){
+  const c = E.ot, o = T_().ots.find(x => x.id === c.id), ru = T_().rutinas[o.rutina];
+  const b = borrador(o.id), pre = c.parte + '|' + c.eq + '|';
+  await DB.encolar({ uid: E.tablet.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7), ts: ahoraIso(), tipo: 'TERMO', otsem: o.id, resp: {},
+    sinMedidor: { parte: c.parte, eq: c.eq }, tec: E.sesion.id });
+  Object.keys(b.resp).forEach(k => { if (k.startsWith(pre)) delete b.resp[k]; });
+  if (b.med) delete b.med[c.parte + '|' + c.eq];
+  await DB.set('borradores', E.borr);
+  E.cola = await DB.cola();
+  irAlSiguiente(o, ru, c, 'Guardado: sin medidor');
+}
 async function sinAccesoEquipo(){
   const c = E.ot, o = T_().ots.find(x => x.id === c.id), ru = T_().rutinas[o.rutina], e = ru.def.partes[c.parte].equipos[c.eq];
   const m = prompt('¿Por qué no pudiste acceder a ' + (e.cod || e.nombre) + '? (obligatorio)\nEj.: sala del inquilino cerrada, pedir permiso');
@@ -1957,6 +1978,8 @@ document.addEventListener('click', async ev => {
   if (a === 'hq-salir'){ E.qr = null; HQ.datos = null; E.pantalla = 'inicio'; dibujar(); return; }
   if (a === 'hq-reintentar'){ cargarHistorial(); return; }
   if (a === 'sin-acceso'){ sinAccesoEquipo(); return; }
+  if (a === 'med'){ const c = E.ot, b = borrador(c.id); b.med = b.med || {}; b.med[c.parte + '|' + c.eq] = t.dataset.v; DB.set('borradores', E.borr); dibujar(); return; }
+  if (a === 'guardar-nomed'){ sinMedidorEquipo(); return; }
   if (a === 'tecla'){ if (esTec() && E.cat.bomberos[0]) E.bomberoPin = E.cat.bomberos[0].id; if (E.pin.length < 4) E.pin += t.dataset.n; E.msg = ''; dibujar(); if (E.pin.length === 4) entrarConPin(); return; }
   if (a === 'borrar'){ E.pin = E.pin.slice(0, -1); dibujar(); return; }
   if (a === 'pin-volver'){ E.bomberoPin = ''; E.pin = ''; E.msg = ''; dibujar(); return; }
